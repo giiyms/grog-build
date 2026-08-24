@@ -4840,7 +4840,9 @@ checksum = "b40ca9252762c466af32d0b1002e91e4e1bc5398f77455e55474deb466355ff5"
 name = "grog-antigravity"
 version = "0.1.0"
 dependencies = [
+ "tempfile",
  "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]
@@ -4849,15 +4851,19 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]
 name = "grog-codex"
 version = "0.1.0"
 dependencies = [
+ "reqwest 0.12.24",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
 ]
 
@@ -4865,10 +4871,13 @@ dependencies = [
 name = "grog-providers"
 version = "0.1.0"
 dependencies = [
+ "dirs 5.0.1",
  "grog-antigravity",
  "grog-claude-bridge",
  "grog-codex",
  "thiserror 2.0.18",
+ "tokio",
+ "xai-grok-home",
 ]
 
 [[package]]
@@ -13896,6 +13905,7 @@ dependencies = [
  "clap",
  "cryptify",
  "dunce",
+ "grog-providers",
  "libc",
  "obfstr",
  "semver",
@@ -14237,6 +14247,7 @@ dependencies = [
  "git2",
  "glob",
  "globset",
+ "grog-providers",
  "ignore",
  "image",
  "indexmap",
@@ -14265,6 +14276,7 @@ dependencies = [
  "ring",
  "rsa",
  "rustls",
+ "schemars 1.0.4",
  "semver",
  "serde",
  "serde_ignored",

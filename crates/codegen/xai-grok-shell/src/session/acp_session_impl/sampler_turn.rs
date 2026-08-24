@@ -1185,6 +1185,12 @@ impl SessionActor {
             *self.turn_stream_drained.lock() = Some(tx);
             (DrainBarrier(&self.turn_stream_drained), rx)
         };
+        if let Some(model) = request.model.as_deref()
+            && grog_providers::consult::is_native_model(model)
+        {
+            crate::tools::grog_ask::set_session_model(request.model.clone());
+            return grog_native_turn(request).await;
+        }
         let request_id = xai_grok_sampler::RequestId::random();
         let request_id_str = request_id.as_str().to_string();
         match self
@@ -1565,6 +1571,65 @@ fn resolve_configured_cutoff(
         web_search: prefer_non_empty(over_w, seed_w, WebSearchOptions::is_empty),
     }
 }
+
+fn flatten_conversation_prompt(request: &ConversationRequest) -> String {
+    request
+        .items
+        .iter()
+        .map(|item| item.text_content())
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+fn grog_sampling_error(message: String) -> xai_grok_sampler::SamplingErrorInfo {
+    xai_grok_sampler::SamplingErrorInfo {
+        kind: xai_grok_sampler::SamplingErrorKind::Api,
+        status_code: None,
+        message,
+        is_retryable: false,
+        retry_after_secs: None,
+        should_retry: None,
+        error_code: None,
+        model_metadata: None,
+        empty_response_context: None,
+        doom_loop_triggers: None,
+        doom_loop_aborted_at_chunk: None,
+        credential: xai_grok_sampling_types::SentCredential::Unknown,
+    }
+}
+
+async fn grog_native_turn(
+    request: ConversationRequest,
+) -> Result<SamplerTurnOutcome, xai_grok_sampler::SamplingErrorInfo> {
+    let model = request
+        .model
+        .clone()
+        .unwrap_or_else(|| "unknown".to_string());
+    let prompt = flatten_conversation_prompt(&request);
+    match grog_providers::consult::provider_turn(&model, &prompt).await {
+        Ok(outcome) => {
+            let response = ConversationResponse {
+                items: vec![ConversationItem::assistant(outcome.text)],
+                stop_reason: Some(xai_grok_sampling_types::StopReason::Stop),
+                usage: None,
+                cost_usd_ticks: None,
+                message_chunks_emitted: 0,
+                doom_loop_signals: Vec::new(),
+                stop_message: None,
+                message_id: outcome.session_id,
+                raw_stop_reason: Some("stop".into()),
+                stop_sequence: None,
+            };
+            Ok(SamplerTurnOutcome::Response(
+                Box::new(response),
+                Box::new(xai_grok_sampler::InferenceLatencyStats::default()),
+            ))
+        }
+        Err(err) => Err(grog_sampling_error(err.to_string())),
+    }
+}
+
 #[cfg(test)]
 #[path = "sampler_turn_tests.rs"]
 mod tests;

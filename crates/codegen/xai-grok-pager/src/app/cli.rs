@@ -23,6 +23,10 @@ pub enum Command {
     Logout,
     /// Sign in to Grok
     Login {
+        /// Native grog provider to sign in (`codex`, `claude`, or `agy`).
+        /// Omit to sign in to xAI.
+        #[arg(value_name = "PROVIDER")]
+        provider: Option<String>,
         /// Ignored (kept for backwards compatibility). OAuth2 is now the only auth method.
         #[arg(long, hide = true)]
         legacy: bool,

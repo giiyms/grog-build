@@ -3664,7 +3664,33 @@ pub(crate) fn resolve_model_list(
     for entry in resolved.values_mut() {
         entry.info.derive_reasoning_effort_fields();
     }
+    merge_grog_native_catalog(&mut resolved, &cfg.endpoints);
     resolved
+}
+
+/// Insert grog native catalogs (`claude-bridge/…`, `antigravity/…`, `codex/…`)
+/// without overwriting existing config or remote keys. Do not point these at
+/// an HTTP inference URL — the sampler intercept handles them.
+fn merge_grog_native_catalog(
+    resolved: &mut IndexMap<String, ModelEntry>,
+    endpoints: &EndpointsConfig,
+) {
+    for entry in grog_providers::builtin_catalog() {
+        let key = format!("{}/{}", entry.provider.as_str(), entry.id);
+        if resolved.contains_key(&key) {
+            continue;
+        }
+        let mut model = ModelEntry::fallback(&key, endpoints);
+        model.info.id = Some(key.clone());
+        model.info.model = entry.id.to_string();
+        model.info.name = Some(entry.display_name.to_string());
+        model.info.model_family = Some(entry.provider.as_str().to_string());
+        model.info.base_url = format!("grog://{}", entry.provider.as_str());
+        model.info.user_selectable = true;
+        model.info.supported_in_api = true;
+        model.info.hidden = false;
+        resolved.insert(key, model);
+    }
 }
 /// Layer 6 of [`resolve_model_list`]: fold the global `[models].extra_headers`
 /// into every model as a base. The presence check is case-insensitive because

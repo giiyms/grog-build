@@ -4,8 +4,15 @@ Grog is this tree, forked into a multi-provider coding agent you launch with
 `grog`. It keeps Grok Build's TUI, tools, sessions, plugins, MCP, subagents,
 and Rhai workflows. It stops being an xAI-only client.
 
-This is the build plan, not a completed fork. It is grounded in the code that
-already exists in this repository.
+This is the build plan, grounded in the code that already exists in this
+repository.
+
+Native provider wiring is in the tree: `grog` launches the pager, `/model`
+lists `claude-bridge/`, `antigravity/`, and `codex/` ids, Ask* tools consult
+those backends, `/workflow council` fans out in parallel, and `grog doctor` /
+`grog login [codex|claude|agy]` report PATH and Codex tokens. Home dir is
+`$GROG_HOME` or `~/.grog` (legacy `~/.grok` still wins if it already exists).
+Live `claude` / `agy` / Codex calls still require the user's own logins.
 
 ## Goal
 

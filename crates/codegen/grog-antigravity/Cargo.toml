@@ -7,6 +7,10 @@ description = "Native Antigravity/agy bridge for grog (spawn agy, protobuf step 
 
 [dependencies]
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["process", "io-util", "rt", "macros", "time"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

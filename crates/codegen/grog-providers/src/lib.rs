@@ -7,6 +7,9 @@ pub use grog_antigravity;
 pub use grog_claude_bridge;
 pub use grog_codex;
 
+pub mod consult;
+pub mod doctor;
+
 use grog_antigravity::ANTIGRAVITY_FALLBACK_MODELS;
 use grog_claude_bridge::CLAUDE_BRIDGE_MODELS;
 use grog_codex::CODEX_FALLBACK_MODELS;
@@ -147,5 +150,16 @@ mod tests {
         assert!(cat.iter().any(|e| e.provider == ProviderId::Codex));
         assert!(cat.iter().any(|e| e.provider == ProviderId::ClaudeBridge));
         assert!(cat.iter().any(|e| e.provider == ProviderId::Antigravity));
+    }
+
+    #[test]
+    fn catalog_contains_council_member_ids() {
+        let keys: Vec<String> = builtin_catalog()
+            .iter()
+            .map(|e| format!("{}/{}", e.provider.as_str(), e.id))
+            .collect();
+        assert!(keys.iter().any(|k| k == "claude-bridge/claude-opus-4-6"));
+        assert!(keys.iter().any(|k| k == "antigravity/gemini-3.6-flash"));
+        assert!(keys.iter().any(|k| k == "codex/gpt-5.3-codex"));
     }
 }

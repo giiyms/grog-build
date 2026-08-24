@@ -3327,7 +3327,20 @@ fn e2e_enterprise_custom_endpoint_skips_xai_defaults() {
         !resolved.contains_key(crate::models::default_model()),
         "xAI default must not leak into enterprise model list"
     );
-    assert_eq!(resolved.len(), 1, "only the prefetched enterprise model");
+    let http: Vec<_> = resolved
+        .iter()
+        .filter(|(_, e)| !e.base_url.starts_with("grog://"))
+        .collect();
+    assert_eq!(
+        http.len(),
+        1,
+        "only the prefetched enterprise model besides grog natives"
+    );
+    assert_eq!(http[0].0.as_str(), "acme-model");
+    assert!(
+        resolved.keys().any(|k| k.starts_with("claude-bridge/")),
+        "grog native catalogs are local CLI/OAuth, not xAI HTTP"
+    );
 }
 #[test]
 fn e2e_default_endpoint_still_injects_defaults() {
@@ -7113,11 +7126,11 @@ fn resolve_model_list_prefetch_visibility_matches_auth_and_server_list() {
     let resolved = resolve_model_list(&cfg, Some(p));
     let sess: Vec<_> = resolved
         .values()
-        .filter(|e| e.visible_for_auth(true))
+        .filter(|e| e.visible_for_auth(true) && !e.base_url.starts_with("grog://"))
         .collect();
     let api: Vec<_> = resolved
         .values()
-        .filter(|e| e.visible_for_auth(false))
+        .filter(|e| e.visible_for_auth(false) && !e.base_url.starts_with("grog://"))
         .collect();
     assert_eq!(sess.len(), 1);
     assert_eq!(api.len(), 1);
@@ -7148,7 +7161,41 @@ fn resolve_model_list_prefetch_replaces_bundled_entirely() {
 fn resolve_model_list_empty_prefetch_yields_empty_base() {
     let cfg = Config::default();
     let resolved = resolve_model_list(&cfg, Some(IndexMap::new()));
-    assert!(resolved.is_empty());
+    assert!(
+        resolved
+            .values()
+            .all(|e| e.base_url.starts_with("grog://")),
+        "empty prefetch must drop xAI defaults; grog native catalog may remain"
+    );
+    assert!(resolved.contains_key("claude-bridge/claude-opus-4-6"));
+    assert!(resolved.contains_key("antigravity/gemini-3.6-flash"));
+    assert!(resolved.contains_key("codex/gpt-5.3-codex"));
+}
+#[test]
+fn resolve_model_list_merges_grog_native_catalog_without_overwriting() {
+    let cfg = Config::default();
+    let mut p = IndexMap::new();
+    let mut kept = prefetch_model_entry(
+        "claude-bridge/claude-opus-4-6",
+        200_000,
+        ApiBackend::default(),
+    );
+    kept.info.base_url = "https://keep.example/v1".into();
+    p.insert("claude-bridge/claude-opus-4-6".into(), kept);
+    let resolved = resolve_model_list(&cfg, Some(p));
+    assert_eq!(
+        resolved
+            .get("claude-bridge/claude-opus-4-6")
+            .expect("kept key")
+            .base_url,
+        "https://keep.example/v1",
+        "existing keys must not be overwritten by the grog catalog"
+    );
+    let flash = resolved
+        .get("antigravity/gemini-3.6-flash")
+        .expect("grog catalog still inserts other natives");
+    assert_eq!(flash.base_url, "grog://antigravity");
+    assert!(flash.user_selectable);
 }
 /// Regression: enterprise managed config overlays env_key on an oauth-only
 /// catalog entry. BYOK must force visibility for API-key users so a

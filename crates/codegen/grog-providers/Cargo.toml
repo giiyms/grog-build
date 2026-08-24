@@ -6,10 +6,13 @@ license = "Apache-2.0"
 description = "Grog inference provider registry: model ids, catalogs, and native bridges"
 
 [dependencies]
+dirs = { workspace = true }
 grog-antigravity = { path = "../grog-antigravity" }
 grog-claude-bridge = { path = "../grog-claude-bridge" }
 grog-codex = { path = "../grog-codex" }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }
+xai-grok-home = { workspace = true }
 
 [lints]
 workspace = true
