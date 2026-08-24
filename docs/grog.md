@@ -29,9 +29,10 @@ A session can:
 4. Drive **Gemini** through an **Antigravity bridge** — the same shape as
    [`@estebanforge/pi-antigravity-bridge`](https://www.npmjs.com/package/@estebanforge/pi-antigravity-bridge):
    spawn Google's `agy` CLI. Not a Gemini Developer API key.
-5. Load **pi-style provider + extension packages** (providers register models;
-   extensions register tools such as `AskClaude` / `AskAntigravity` /
-   `AskCodex`).
+5. Register **native grog providers and Ask\* tools** (same *shape* as the pi
+   packages: a `/model` provider plus `AskClaude` / `AskAntigravity` /
+   `AskCodex`). We study those packages and **reimplement them in Rust**. We
+   do not load, wrap, or npm-install them.
 6. Run a **council workflow**: several model variants answer in parallel, then
    a chair synthesizes.
 
@@ -54,10 +55,8 @@ Grok Build is not a thin chat client. The pieces grog needs are mostly here:
 
 The gap versus pi is not "plugins" in general. It is **inference providers
 and subscription/CLI bridges**. Pi extensions call `pi.registerProvider()` and
-`pi.registerTool()`. Grok plugins cannot.
-
-Do not rewrite the TUI or the tool loop. Add a provider layer, then rename
-the public identity.
+`pi.registerTool()`. Grok plugins cannot. Grog grows that surface as **first-party
+Rust crates**, using the pi packages as a protocol study, not as a runtime.
 
 ## Architecture
 
@@ -81,7 +80,6 @@ flowchart TB
     CODEX["codex-subscription<br/>ChatGPT OAuth"]
     CLAUDE["claude-bridge<br/>spawn claude / Agent SDK"]
     AGY["antigravity-bridge<br/>spawn agy"]
-    PI["pi-compat extension host<br/>registerProvider / registerTool"]
   end
 
   CLI --> SHELL
@@ -94,8 +92,6 @@ flowchart TB
   REG --> CODEX
   REG --> CLAUDE
   REG --> AGY
-  PI --> REG
-  PI --> TOOLS
 ```
 
 Three kinds of "provider" must stay distinct:
@@ -204,12 +200,14 @@ sampler as the `http` provider. Custom `[model.*]` entries continue to work.
 
 Discovery, in order:
 
-1. Built-in providers (http, plus the three below once they land)
-2. Native grog provider plugins (`~/.grog/providers/<id>/provider.toml` +
-   optional binary)
-3. Pi-compat packages (Phase 1b)
+1. Built-in providers compiled into grog: `http`, `codex`, `claude-bridge`,
+   `antigravity`
+2. Optional later: native grog provider plugins (`~/.grog/providers/<id>/`)
 
-`/model` and `grog models` list `provider/model` ids, same as pi
+There is **no** Node host and **no** `grog plugin install npm:…` path for
+inference. Pi packages are reference material only.
+
+`/model` and `grog models` list `provider/model` ids
 (`claude-bridge/claude-opus-4-6`, `antigravity/gemini-3.6-flash`,
 `codex/gpt-5.3-codex`).
 
@@ -236,24 +234,6 @@ command = "agy"         # Google Cloud Code Assist CLI
 default = "codex/gpt-5.3-codex"
 ```
 
-### Phase 1b — Pi extension host (optional, high leverage)
-
-To actually `link in` npm packages the way pi does:
-
-- Small Node host grog spawns (`grog-pi-host`), implementing a **subset** of
-  pi's `ExtensionAPI`: `registerProvider`, `registerTool`, `on('session_start')`.
-- Grog talks to it over stdio JSON-RPC.
-- `grog plugin install npm:pi-claude-bridge` drops the package under
-  `~/.grog/extensions/` and the host loads it.
-
-This is how Claude bridge and Antigravity stay "just like the pi extension
-package" without rewriting their TypeScript. Native Rust ports (Phases 3–4)
-are the fallback if the host is too lossy (streaming, tool bridging, TUI
-steering).
-
-Ship the native bridges first if the host slips. Keep the npm install path
-as the compatibility goal.
-
 ### Ask* tools
 
 Pi bridges are two things: a **provider** (session runs *as* Claude / Gemini)
@@ -266,86 +246,115 @@ and an **Ask\*** tool (another model consults them). Grog needs both.
 
 Council workflows use the Ask\* tools and/or `agent(..., #{ model })`.
 
+## What we learned from the pi packages (and will not wrap)
+
+Those packages are the spec. Grog reimplements the **behavior** in Rust.
+Shipping their TypeScript as a sidecar is out.
+
+### Claude (`pi-claude-bridge` / Agent SDK)
+
+- Two products in one crate: a **session provider** (`claude-bridge/<id>`)
+  and an **AskClaude** tool (opt-in, disabled when that provider is already
+  active).
+- Auth is Claude Code's, not grog's. No Anthropic API key, no Claude Pro
+  OAuth inside grog.
+- The child is `claude` / Agent SDK in print mode. Stream
+  `--output-format stream-json`. The child must not take over the TTY.
+- Model ids are Claude Code ids with an optional `[1m]` suffix. Runtime
+  context is measured, not copied from a catalog: Opus 4.7 is 1M bare; Opus
+  4.8 needs `[1m]`; Opus 4.6 / Sonnet 4.6 `[1m]` depend on Max vs Extra
+  Usage. Grog keeps that table in `grog-claude-bridge`.
+- Tool loop stays in grog: expose grog tools over a **loopback MCP** the
+  child is told about. Pair MCP `tools/call` with Claude's
+  `_meta["claudecode/toolUseId"]` — call order is not the pairing key.
+  Filter builtins and `AskClaude` so the child cannot recurse.
+- `AskClaude` modes: `read` (default), `none`, `full`. Isolated sessions
+  drop history. Thinking effort maps onto Claude Code's thinking flags.
+- Mid-turn steering lands at the **next tool boundary**, not after the
+  whole turn. Session rebuild after abort/`/compact` is expensive (cache
+  break); prefer resume when history has not moved.
+
+Native crate: spawn `claude`, parse stream-json, own the MCP server. Do not
+depend on `@anthropic-ai/claude-agent-sdk` or the npm package.
+
+### Antigravity (`@estebanforge/pi-antigravity-bridge`)
+
+- Same dual shape: provider `antigravity/<slug>` plus `AskAntigravity`.
+- Auth is `agy`'s Google login. Grog never sees the token. Spawn the
+  **unmodified** `agy` binary (`AGY_BIN` override). Do not call Google's
+  backend with reused OAuth — that is what got token-scrape tools banned.
+- `agy -p` does not print a conversation id and does not stream tokens on
+  stdout. The bridge snapshots `~/.gemini/antigravity-cli/conversations/*.db`
+  (or `AGY_CONVERSATIONS_DIR`), diffs after spawn, and on collision reads
+  `/proc/<pid>/fd` for the `.db` our child has open.
+- Stream by polling SQLite every ~250ms. `PRAGMA data_version` first; only
+  SELECT when it moved. Three trailing 100ms polls after exit; skip those
+  on abort.
+- `steps.step_payload` is unpublished protobuf. Hand-rolled walker, skip
+  unknown fields:
+
+  | Payload path | Meaning |
+  | --- | --- |
+  | field 20 → 1 | agent text |
+  | field 5 → 4 → 2 or 9, 3 | tool name, input JSON |
+  | field 30 → 4 | title |
+
+  Step types in the DB (15 text, 14 thinking, 23 title, 5/7/8/9/17/21/33/101/132/138 tools). Status 3 = complete.
+- `agy -p` cannot answer y/n. Default `--dangerously-skip-permissions` or
+  the child hangs on `run_command`. Plan mode (`/agy mode plan`) is the
+  no-write escape. Do not combine `--sandbox` with skip-permissions.
+- MCP for grog tools: **per-invocation** config dir passed as extra
+  `--add-dir`. Never write `~/.gemini/config/mcp_config.json`. Bind
+  127.0.0.1 + a per-session `x-bridge-token`. AskAntigravity inner agy
+  does **not** get that dir (recursion).
+- Catalog comes from `agy models` (slugify display names). Keep a fallback
+  list if discovery fails so the picker is not empty.
+
+Native crate: spawn, discover DB, decode protobuf, poll. rusqlite in grog,
+not Node's `node:sqlite`.
+
+### Codex (ChatGPT subscription)
+
+Pi's built-in `openai-codex` is the reference, not an npm bridge.
+
+- OAuth against `auth.openai.com` (PKCE browser or device code at
+  `/codex/device`). Client id is the public Codex CLI id. Refresh at
+  `/oauth/token`. `ChatGPT-Account-Id` comes from the JWT
+  `https://api.openai.com/auth` claim.
+- Prefer reading `~/.codex/auth.json` when the user already ran `codex login`,
+  then copy/refresh into `~/.grog/auth/codex.json`. Do not invent a second
+  login if Codex CLI is already signed in.
+- Inference is the ChatGPT Codex backend (`chatgpt.com/backend-api` /
+  Responses-shaped), **not** `api.openai.com` with `OPENAI_API_KEY`.
+- `AskCodex` for consults from another provider.
+
 ## Phase 2 — Codex subscription
 
 Wire ChatGPT Plus/Pro **Codex OAuth**, not `OPENAI_API_KEY`.
 
-This is the one vendor grog should authenticate **itself**, because that is
-how Codex-for-OSS works (same account ChatGPT / the Codex CLI uses). Pi calls
-this `openai-codex`.
-
-Implementation outline:
-
-1. `grog login` becomes a **provider picker** (Codex, optional xAI, later
-   others). `grog login codex` starts the ChatGPT OAuth / device-code flow
-   Codex CLI uses.
-2. Store tokens at `~/.grog/auth/codex.json` (0600). Do not reuse
-   `~/.grok/auth.json` (that file is xAI session tokens).
-3. New sampler backend **or** a dedicated provider that speaks the Codex
-   Responses-shaped API with the ChatGPT access token, refresh, and account
-   headers.
-4. Catalog: the Codex models the subscription actually entitles (gpt-5.x
-   Codex variants, whatever the account advertises). Refresh on login.
-5. `AskCodex` tool for when the session is on another provider.
-
-Reuse Grok's existing `auth_provider_command` only as an escape hatch, not as
-the default Codex path. Users should not have to write a helper binary to use
-a ChatGPT subscription.
+1. `grog login` is a provider picker. `grog login codex` uses device-code
+   or browser PKCE, or imports `~/.codex/auth.json`.
+2. Store tokens at `~/.grog/auth/codex.json` (0600).
+3. Provider speaks the Codex backend with the ChatGPT access token,
+   refresh, and account headers.
+4. Catalog = what the subscription advertises. Refresh on login.
+5. `AskCodex` when the session is on another provider.
 
 Do **not** confuse this with `foreign_sessions` Codex resume. That already
 imports `~/.codex` transcripts. Live inference is separate.
 
-## Phase 3 — Claude bridge (not a Claude subscription)
+## Phase 3 — Native Claude bridge
 
-Match `pi-claude-bridge`:
+Crate `grog-claude-bridge`. Behavior above. First slice: `AskClaude` text
+consult (`read` mode, no MCP). Second: full `/model claude-bridge/…` with
+loopback MCP and stream-json. Prerequisite: `claude` on `PATH`.
 
-- Grog does **not** implement Anthropic OAuth or store `ANTHROPIC_API_KEY`
-  for this provider.
-- It spawns the user's **Claude Code** (`claude` CLI / `@anthropic-ai/claude-agent-sdk`).
-- Auth is whatever `claude` already has in `~/.claude`.
-- Streaming, tool calls, and steering stay in grog's TUI: the child must not
-  open its own interactive UI.
+## Phase 4 — Native Antigravity bridge
 
-Two implementation options, in preference order:
-
-1. **Pi package via the Phase 1b host** — install `pi-claude-bridge` and
-   shim `registerProvider` + `AskClaude`.
-2. **Native port** — Rust provider that:
-   - `claude -p --output-format stream-json` (or Agent SDK stdio)
-   - Pipes grog's conversation + a tool-bridge MCP into the child
-   - Decodes streamed events into sampler `TokenStream`
-   - Forwards grog tools (except builtins / `AskClaude`) so Claude Code can
-     edit the same workspace grog owns
-
-MCP tool bridging is the hard part and is exactly why the pi package exists.
-Budget it. A first slice can be "text-only consult" (`AskClaude`) before
-full `/model claude-bridge/…` with tools.
-
-Prerequisite: `claude` on `PATH` and a working `claude` login. `grog doctor`
-should say so.
-
-## Phase 4 — Antigravity bridge (Gemini)
-
-Match `@estebanforge/pi-antigravity-bridge`:
-
-- Spawn `agy` (Google Cloud Code Assist / Antigravity), not Generative
-  Language API keys.
-- Auth is the user's Google / `agy` login.
-- Register `antigravity/gemini-*` (and whatever else that account
-  advertises — the agy catalog can include Claude/GPT-OSS **through
-  Google**, which is still the antigravity provider, not claude-bridge).
-- Stream by the same mechanism the pi package uses (agy conversation DB /
-  protobuf, or `agy -p` stdout — follow the package, do not invent a second
-  protocol).
-- `AskAntigravity` tool for one-shot Gemini consults.
-- Optional: per-invocation MCP so `agy` can see grog tools without rewriting
-  `~/.gemini/config/mcp_config.json`.
-
-Prerequisite: `agy` on `PATH`. Document install (`agy` from Google Cloud
-Code Assist). `grog doctor` checks it.
-
-Antigravity advertising Claude models must **not** replace claude-bridge.
-Same model name, different bill and tool surface. Keep provider prefixes.
+Crate `grog-antigravity`. Behavior above. First slice: protobuf decoder +
+`AskAntigravity` after `agy -p` exits (easier than live poll). Second:
+250ms poll streaming + `/model antigravity/…`. Prerequisite: `agy` on
+`PATH`.
 
 ## Phase 5 — Council workflows
 
@@ -415,14 +424,15 @@ tool is disabled inside an Ask\* and inside council member sessions.
 ## Suggested file layout (new code)
 
 ```text
-crates/codegen/grog-providers/     # trait, registry, http adapter
-crates/codegen/grog-codex/         # ChatGPT OAuth + Codex API
-crates/codegen/grog-claude-bridge/ # spawn claude / Agent SDK adapter
-crates/codegen/grog-antigravity/   # spawn agy adapter
-crates/codegen/grog-pi-host/       # optional Node host + JSON-RPC
+crates/codegen/grog-providers/     # trait, registry, model-id parsing
+crates/codegen/grog-codex/         # ChatGPT OAuth + Codex backend
+crates/codegen/grog-claude-bridge/ # native claude spawn + stream-json + AskClaude
+crates/codegen/grog-antigravity/   # native agy spawn + sqlite poll + protobuf + AskAntigravity
 crates/codegen/xai-grok-shell/src/session/workflows/council.rhai
 docs/grog.md                       # this file
 ```
+
+No `grog-pi-host`. No npm dependency.
 
 Installer / CLI identity edits stay in `xai-grok-pager`, `xai-grok-pager-bin`,
 `xai-grok-home`.
@@ -443,10 +453,9 @@ Work in this order so each slice is usable alone:
    `claude` on PATH.
 5. **AskAntigravity (text consult)** — same for `agy`.
 6. **Full session bridges** — `/model claude-bridge/…` and
-   `antigravity/…` with tool MCP bridging.
-7. **Pi-compat host** — load the real npm packages if the native ports lag
-   or to pick up their updates.
-8. **Council workflow** — once at least two providers stream reliably.
+   `antigravity/…` with loopback MCP (Claude) and per-invocation agy
+   `--add-dir` MCP (Antigravity).
+7. **Council workflow** — once at least two providers stream reliably.
 
 ## Doctor and UX
 
@@ -464,10 +473,8 @@ visible but disabled, with the doctor reason.
 
 ## Risks
 
-- **Pi packages are not drop-in.** They import `@mariozechner/pi-coding-agent`
-  types and expect pi's TUI. A host that only implements `registerProvider` /
-  `registerTool` will still miss events. Treat npm compatibility as best-effort;
-  native bridges are the reliability path.
+- **Do not wrap the npm packages.** They target pi's TypeScript
+  `ExtensionAPI`. Reimplementing the protocol in Rust is the product.
 - **CLI bridges are slow and opaque.** Spawning Claude Code or agy is not an
   HTTP token stream. Timeouts, cancellation (`Esc`), and mid-turn steering
   need an explicit design in the provider trait (`abort`, `inject_user_message`).
@@ -483,14 +490,7 @@ visible but disabled, with the doctor reason.
   supported CLI exists. Codex OAuth should follow the same protocol the
   official Codex CLI uses.
 
-## First implementation slice (when coding starts)
+## First implementation slice
 
-The first PR after this plan should be boring and shippable:
-
-1. `[[bin]] name = "grog"` (or install symlink) + clap argv0 `grog`.
-2. `GROG_HOME` / `~/.grog` with fallback to `GROK_HOME` / `~/.grok`.
-3. Product strings in clap, terminal title, and system prompt.
-4. Installer copies/symlinks `grog`.
-
-That is enough to type `grog` and keep using today's models. Providers,
-bridges, and council are the next PRs, one provider at a time.
+Landed in this tree as native crates plus a `grog` binary name. Next: wire
+the registry into the sampler, then live spawn/OAuth.
