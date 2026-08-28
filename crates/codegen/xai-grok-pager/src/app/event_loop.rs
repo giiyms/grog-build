@@ -1233,9 +1233,8 @@ pub(crate) async fn run(
                 .privacy
                 .privacy_banner_acked
         });
-    app.plugin_cta_enabled = xai_grok_config::env_bool("GROK_PLUGIN_CTA")
-        .or_else(|| remote_settings.as_ref().and_then(|s| s.plugin_cta))
-        .unwrap_or(false);
+    app.plugin_cta_enabled =
+        xai_grok_config::env_bool_grog_or_grok("GROK_PLUGIN_CTA").unwrap_or(false);
     app.plugin_cta_marketplace = launch_effective_config
         .as_ref()
         .and_then(plugin_cta_marketplace_from);

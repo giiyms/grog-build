@@ -4142,7 +4142,11 @@ fn resolve_trace_upload_honors_config_when_telemetry_on() {
     assert_eq!(r.source, ConfigSource::Config);
     cfg.telemetry.trace_upload = None;
     let r = cfg.resolve_trace_upload();
-    assert!(r.value, "defaults on when telemetry fully enabled");
+    assert!(
+        !r.value,
+        "grog defaults trace upload off even when telemetry is on"
+    );
+    assert_eq!(r.source, ConfigSource::Default);
 }
 #[test]
 #[serial]
@@ -6566,6 +6570,12 @@ fn is_telemetry_explicitly_disabled_sync_env_signals() {
     unsafe { std::env::set_var("DISABLE_TELEMETRY", "1") };
     assert!(is_telemetry_explicitly_disabled_sync());
     unsafe { std::env::remove_var("DISABLE_TELEMETRY") };
+    unsafe { std::env::remove_var("GROK_TELEMETRY_ENABLED") };
+    unsafe { std::env::remove_var("GROG_TELEMETRY_ENABLED") };
+    assert!(
+        is_telemetry_explicitly_disabled_sync(),
+        "grog treats unset telemetry as disabled"
+    );
 }
 #[test]
 fn version_overrides_apply_into_typed_config() {
@@ -7162,9 +7172,7 @@ fn resolve_model_list_empty_prefetch_yields_empty_base() {
     let cfg = Config::default();
     let resolved = resolve_model_list(&cfg, Some(IndexMap::new()));
     assert!(
-        resolved
-            .values()
-            .all(|e| e.base_url.starts_with("grog://")),
+        resolved.values().all(|e| e.base_url.starts_with("grog://")),
         "empty prefetch must drop xAI defaults; grog native catalog may remain"
     );
     assert!(resolved.contains_key("claude-bridge/claude-opus-4-6"));
@@ -7585,4 +7593,62 @@ fn a_status_line_the_parser_could_not_read_in_full_reaches_grok_inspect() {
         1
     );
     assert_eq!(cfg.ui.theme.as_deref(), Some("kanagawa"));
+}
+
+#[test]
+#[serial]
+fn grog_privacy_remote_cannot_enable_telemetry_or_marketplace() {
+    unsafe { std::env::remove_var("GROK_TELEMETRY_ENABLED") };
+    unsafe { std::env::remove_var("GROG_TELEMETRY_ENABLED") };
+    unsafe { std::env::remove_var("GROK_TELEMETRY_TRACE_UPLOAD") };
+    unsafe { std::env::remove_var("GROG_TELEMETRY_TRACE_UPLOAD") };
+    unsafe { std::env::remove_var("GROK_OFFICIAL_MARKETPLACE_AUTO_REGISTER") };
+    unsafe { std::env::remove_var("GROG_OFFICIAL_MARKETPLACE_AUTO_REGISTER") };
+    unsafe { std::env::remove_var("GROK_FEEDBACK_ENABLED") };
+    unsafe { std::env::remove_var("GROG_FEEDBACK_ENABLED") };
+    unsafe { std::env::remove_var("GROK_FEEDBACK_TRACE_CARD") };
+    let mut cfg = Config::default();
+    cfg.remote_settings = Some(crate::util::config::RemoteSettings {
+        telemetry_enabled: Some(true),
+        telemetry_mode: Some("true".into()),
+        trace_upload_enabled: Some(true),
+        official_marketplace_auto_register: Some(true),
+        feedback_enabled: Some(true),
+        feedback_trace_card_enabled: Some(true),
+        ..Default::default()
+    });
+    assert!(
+        cfg.resolve_telemetry_mode().value.is_disabled(),
+        "remote settings must not turn grog telemetry on"
+    );
+    assert_eq!(cfg.resolve_telemetry_mode().source, ConfigSource::Default);
+    assert!(!cfg.resolve_trace_upload().value);
+    assert!(!cfg.resolve_official_marketplace_auto_register().value);
+    assert!(!cfg.is_feature_enabled(Feature::Feedback));
+    assert!(!cfg.is_feature_enabled(Feature::FeedbackTraceCard));
+}
+
+#[test]
+#[serial]
+fn grog_telemetry_grog_env_alias_opts_in() {
+    unsafe { std::env::remove_var("GROK_TELEMETRY_ENABLED") };
+    unsafe { std::env::set_var("GROG_TELEMETRY_ENABLED", "1") };
+    let cfg = Config::default();
+    let mode = cfg.resolve_telemetry_mode();
+    assert!(mode.value.is_enabled());
+    assert_eq!(mode.source, ConfigSource::Env);
+    unsafe { std::env::remove_var("GROG_TELEMETRY_ENABLED") };
+}
+
+#[test]
+fn grog_privacy_defaults_are_off() {
+    let cfg = Config::default();
+    assert!(cfg.resolve_telemetry_mode().value.is_disabled());
+    assert!(!cfg.resolve_trace_upload().value);
+    assert!(!cfg.resolve_official_marketplace_auto_register().value);
+    assert!(!cfg.is_feature_enabled(Feature::Feedback));
+    assert!(!cfg.is_feature_enabled(Feature::FeedbackTraceCard));
+    assert!(!cfg.telemetry.mixpanel_enabled);
+    assert!(cfg.telemetry.events_url.is_none());
+    assert!(cfg.telemetry.mixpanel_token.is_none());
 }

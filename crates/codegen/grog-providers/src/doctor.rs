@@ -13,11 +13,7 @@ pub struct DoctorCheck {
 }
 
 pub fn doctor_checks() -> Vec<DoctorCheck> {
-    vec![
-        claude_check(),
-        antigravity_check(),
-        codex_check(),
-    ]
+    vec![claude_check(), antigravity_check(), codex_check()]
 }
 
 pub fn format_doctor_report() -> String {
@@ -30,6 +26,11 @@ pub fn format_doctor_report() -> String {
             check.detail
         ));
     }
+    out.push_str("\nPrivacy\n");
+    out.push_str("  telemetry        off      default; remote settings cannot enable it\n");
+    out.push_str("  mixpanel/sentry  off      no baked endpoints; Sentry DSN is runtime-only\n");
+    out.push_str("  marketplace      empty    official xAI source is not auto-registered\n");
+    out.push_str("  feedback         off      `/feedback` and trace cards are opt-in\n");
     out
 }
 
@@ -38,7 +39,10 @@ fn claude_check() -> DoctorCheck {
         Some(path) => DoctorCheck {
             provider: ProviderId::ClaudeBridge,
             ok: true,
-            detail: format!("{} (auth is Claude Code's ~/.claude, not grog)", path.display()),
+            detail: format!(
+                "{} (auth is Claude Code's ~/.claude, not grog)",
+                path.display()
+            ),
         },
         None => DoctorCheck {
             provider: ProviderId::ClaudeBridge,
@@ -130,7 +134,8 @@ pub fn login(provider: &str) -> Result<String, String> {
 }
 
 fn login_codex() -> Result<String, String> {
-    let user_home = dirs::home_dir().ok_or_else(|| "could not resolve home directory".to_string())?;
+    let user_home =
+        dirs::home_dir().ok_or_else(|| "could not resolve home directory".to_string())?;
     let cli = grog_codex::auth_json_path(&user_home);
     if !cli.is_file() {
         return Err(format!(
@@ -158,12 +163,18 @@ mod tests {
     fn doctor_always_reports_three_providers() {
         let checks = doctor_checks();
         assert_eq!(checks.len(), 3);
-        assert!(checks.iter().any(|c| c.provider == ProviderId::ClaudeBridge));
+        assert!(
+            checks
+                .iter()
+                .any(|c| c.provider == ProviderId::ClaudeBridge)
+        );
         assert!(checks.iter().any(|c| c.provider == ProviderId::Antigravity));
         assert!(checks.iter().any(|c| c.provider == ProviderId::Codex));
         let text = format_doctor_report();
         assert!(text.contains("Grog providers"));
         assert!(text.contains("claude-bridge"));
+        assert!(text.contains("Privacy"));
+        assert!(text.contains("official xAI source is not auto-registered"));
     }
 
     #[test]

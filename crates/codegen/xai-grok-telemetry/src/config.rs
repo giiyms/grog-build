@@ -143,24 +143,12 @@ pub struct TelemetryConfig {
 fn internal_defaults() -> (Option<String>, Option<String>, Option<String>, bool) {
     (None, None, None, false)
 }
-fn build_env_default(value: Option<&'static str>) -> Option<String> {
-    value
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .map(str::to_owned)
-}
 impl Default for TelemetryConfig {
     fn default() -> Self {
-        let (baked_url, baked_key, baked_token, baked_enabled) = internal_defaults();
-        let build_url = build_env_default(option_env!("GROK_TELEMETRY_BUILD_EVENTS_URL"));
-        let build_key = build_env_default(option_env!("GROK_TELEMETRY_BUILD_EVENTS_API_KEY"));
-        let build_token = build_env_default(option_env!("GROK_TELEMETRY_BUILD_MIXPANEL_TOKEN"));
-        let mixpanel_enabled = baked_enabled || build_token.is_some();
-        let (events_url, events_api_key, mixpanel_token) = (
-            build_url.or(baked_url),
-            build_key.or(baked_key),
-            build_token.or(baked_token),
-        );
+        // Grog never ships xAI Mixpanel / events URLs, even if a downstream
+        // build sets `GROK_TELEMETRY_BUILD_*`. User config and runtime env
+        // remain the only opt-in.
+        let (events_url, events_api_key, mixpanel_token, mixpanel_enabled) = internal_defaults();
         Self {
             enabled: None,
             events_url,
@@ -181,22 +169,30 @@ impl Default for TelemetryConfig {
         }
     }
 }
+/// Prefer `GROG_TELEMETRY_ENABLED` over `GROK_TELEMETRY_ENABLED`.
+pub fn env_telemetry_mode_grog_or_grok() -> Option<TelemetryMode> {
+    env_telemetry_mode("GROG_TELEMETRY_ENABLED")
+        .or_else(|| env_telemetry_mode("GROK_TELEMETRY_ENABLED"))
+}
+
 impl TelemetryConfig {
     pub fn apply_env_overrides(&mut self) {
         self.normalize();
-        if let Some(value) = Self::env_override("GROK_TELEMETRY_EVENTS_URL") {
+        if let Some(value) = Self::env_override_grog_or_grok("GROK_TELEMETRY_EVENTS_URL") {
             self.events_url = value;
         }
-        if let Some(value) = Self::env_override("GROK_TELEMETRY_EVENTS_API_KEY") {
+        if let Some(value) = Self::env_override_grog_or_grok("GROK_TELEMETRY_EVENTS_API_KEY") {
             self.events_api_key = value;
         }
-        if let Some(value) = Self::env_override("GROK_TELEMETRY_MIXPANEL_TOKEN") {
+        if let Some(value) = Self::env_override_grog_or_grok("GROK_TELEMETRY_MIXPANEL_TOKEN") {
             self.mixpanel_token = value;
         }
-        if let Some(value) = env_bool("GROK_TELEMETRY_MIXPANEL_ENABLED") {
+        if let Some(value) =
+            xai_grok_config::env_bool_grog_or_grok("GROK_TELEMETRY_MIXPANEL_ENABLED")
+        {
             self.mixpanel_enabled = value;
         }
-        if let Some(value) = env_bool("GROK_TELEMETRY_TRACE_UPLOAD") {
+        if let Some(value) = xai_grok_config::env_bool_grog_or_grok("GROK_TELEMETRY_TRACE_UPLOAD") {
             self.trace_upload = Some(value);
         }
     }
@@ -205,6 +201,15 @@ impl TelemetryConfig {
         self.events_api_key = Self::normalize_optional_string(self.events_api_key.take());
         self.mixpanel_token = Self::normalize_optional_string(self.mixpanel_token.take());
     }
+    fn env_override_grog_or_grok(grok_name: &str) -> Option<Option<String>> {
+        if let Some(grog) = xai_grok_config::grog_env_alias(grok_name)
+            && let Some(value) = Self::env_override(&grog)
+        {
+            return Some(value);
+        }
+        Self::env_override(grok_name)
+    }
+
     fn env_override(name: &str) -> Option<Option<String>> {
         match std::env::var(name) {
             Ok(value) => Some(Self::normalize_optional_string(Some(value))),
@@ -222,20 +227,6 @@ impl TelemetryConfig {
         })
     }
 }
-/// Parse an env var as a boolean. Returns `None` if unset or unrecognized.
-///
-/// Local copy of `xai_grok_shell::agent::config::env_bool` so this crate
-/// stays free of a shell back-edge. Shell keeps its own copy for callers
-/// outside the telemetry config path.
-fn env_bool(name: &str) -> Option<bool> {
-    let value = std::env::var(name).ok()?;
-    match value.trim().to_ascii_lowercase().as_str() {
-        "" => None,
-        "1" | "true" | "yes" | "on" | "enabled" => Some(true),
-        "0" | "false" | "no" | "off" | "disabled" => Some(false),
-        _ => None,
-    }
-}
 /// Derive a stable deployment ID (UUIDv5) from the deployment key.
 pub fn deployment_id_from_key(key: &str) -> String {
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, key.as_bytes()).to_string()
@@ -244,21 +235,13 @@ pub fn deployment_id_from_key(key: &str) -> String {
 mod tests {
     use super::*;
     #[test]
-    fn build_env_default_normalizes() {
-        assert_eq!(build_env_default(None), None);
-        assert_eq!(build_env_default(Some("")), None);
-        assert_eq!(build_env_default(Some(" \t ")), None);
-        assert_eq!(build_env_default(Some(" key ")), Some("key".to_owned()));
-    }
-    #[test]
-    fn default_is_build_env_layer_when_feature_off() {
+    fn default_ships_no_xai_telemetry_endpoints() {
         let cfg = TelemetryConfig::default();
-        let url = build_env_default(option_env!("GROK_TELEMETRY_BUILD_EVENTS_URL"));
-        let key = build_env_default(option_env!("GROK_TELEMETRY_BUILD_EVENTS_API_KEY"));
-        let token = build_env_default(option_env!("GROK_TELEMETRY_BUILD_MIXPANEL_TOKEN"));
-        assert_eq!(cfg.mixpanel_enabled, token.is_some());
-        assert_eq!(cfg.events_url, url);
-        assert_eq!(cfg.events_api_key, key);
-        assert_eq!(cfg.mixpanel_token, token);
+        assert!(!cfg.mixpanel_enabled);
+        assert_eq!(cfg.events_url, None);
+        assert_eq!(cfg.events_api_key, None);
+        assert_eq!(cfg.mixpanel_token, None);
+        assert_eq!(cfg.trace_upload, None);
+        assert_eq!(cfg.otel_enabled, None);
     }
 }

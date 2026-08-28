@@ -172,14 +172,24 @@ Grog so the model does not claim to be xAI's Grok when the session is on
 Claude or Codex. Keep "Grok" only as a **model family** label when the active
 model is actually `grok-*`.
 
+### Privacy (landed)
+
+Grog does not ship xAI telemetry. Defaults:
+
+- `[features] telemetry` off; xAI remote settings cannot turn it on
+- Mixpanel / events URLs are not baked in (`GROK_TELEMETRY_BUILD_*` is ignored)
+- Sentry uses only a runtime `SENTRY_DSN` (no compile-time DSN) and is opt-in
+- Trace upload off unless the user sets it
+- `/feedback` and the feedback trace card off; remote cannot enable them
+- Official marketplace (`github.com/xai-org/plugin-marketplace`) is never
+  auto-registered; start with an empty marketplace plus user-added sources
+
+Opt-in remains via env (`GROG_TELEMETRY_ENABLED` / `GROK_TELEMETRY_ENABLED`,
+`GROG_ERROR_REPORTING`) or local `config.toml`.
+
 ### Explicitly out of Phase 0
 
 - Crate names, Bazel paths, `xai-` prefixes
-- Telemetry endpoints (disable or make no-op; do not ship xAI telemetry as
-  grog)
-- Official xAI plugin marketplace URL (`github.com/xai-org/plugin-marketplace`)
-  — stop auto-registering it; grog should start with an empty marketplace plus
-  user-added sources
 
 ## Phase 1 — Provider registry (pi-shaped, Rust-native)
 
@@ -448,9 +458,9 @@ Installer / CLI identity edits stay in `xai-grok-pager`, `xai-grok-pager-bin`,
 
 Work in this order so each slice is usable alone:
 
-1. **Identity** — `grog` argv, `~/.grog`, env aliases, stop xAI marketplace
-   auto-add, disable default telemetry. You can already use custom HTTP
-   models.
+1. **Identity** — `grog` argv, `~/.grog`, env aliases, no xAI marketplace
+   auto-add, telemetry off by default. You can already use custom HTTP
+   models. **Landed.**
 2. **Provider registry + HTTP adapter** — `/model` lists `http/…` and
    existing `[model.*]` under a provider prefix. No behavior change for
    people who only use xAI keys.
@@ -499,5 +509,5 @@ visible but disabled, with the doctor reason.
 
 ## First implementation slice
 
-Landed in this tree as native crates plus a `grog` binary name. Next: wire
-the registry into the sampler, then live spawn/OAuth.
+Landed in this tree as native crates plus a `grog` binary name, provider
+wiring, council workflow, and privacy-max telemetry defaults.

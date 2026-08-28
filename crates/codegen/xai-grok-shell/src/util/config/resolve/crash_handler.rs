@@ -10,26 +10,27 @@ fn crash_handler_from_toml(v: Option<&TomlValue>) -> Option<bool> {
 }
 
 /// Precedence core shared by the typed resolver and the disk reader so they
-/// can't drift: requirement > env > config > managed > remote > default `false`.
+/// can't drift: requirement > env > config > managed > default `false`.
+/// Grog ignores remote `crash_handler_enabled` so xAI settings cannot turn
+/// crash dumps on.
 fn resolve_crash_handler_enabled_layers(
     requirement: Option<bool>,
     config: Option<bool>,
     managed: Option<bool>,
-    feature_flag: Option<bool>,
+    _feature_flag: Option<bool>,
 ) -> crate::agent::config::Resolved<bool> {
     use crate::agent::config::BoolFlag;
     BoolFlag::env(ENV_CRASH_HANDLER)
         .requirement(requirement)
         .config(config)
         .managed(managed)
-        .feature_flag(feature_flag)
         .resolve()
 }
 
 /// Resolve whether the full crash handler should be installed.
-/// Precedence: requirements > env (`GROK_CRASH_HANDLER`) >
-/// user `[diagnostics] crash_handler` > managed > remote settings
-/// `crash_handler_enabled` > default `false`.
+/// Precedence: requirements > env (`GROG_CRASH_HANDLER` / `GROK_CRASH_HANDLER`) >
+/// user `[diagnostics] crash_handler` > managed > default `false`.
+/// Remote settings cannot enable it.
 pub fn resolve_crash_handler_enabled(
     requirements: Option<&TomlValue>,
     user: Option<&TomlValue>,
@@ -104,6 +105,7 @@ mod crash_handler_gate_tests {
     fn guard() -> std::sync::MutexGuard<'static, ()> {
         let g = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         unsafe { std::env::remove_var(ENV_CRASH_HANDLER) };
+        unsafe { std::env::remove_var("GROG_CRASH_HANDLER") };
         g
     }
 
@@ -140,8 +142,8 @@ mod crash_handler_gate_tests {
         assert!(r.value);
         assert_eq!(r.source, ConfigSource::ManagedConfig);
         let r = resolve_crash_handler_enabled(None, None, None, Some(&remote(Some(true))));
-        assert!(r.value);
-        assert_eq!(r.source, ConfigSource::Remote);
+        assert!(!r.value, "grog: remote settings cannot enable crash dumps");
+        assert_eq!(r.source, ConfigSource::Default);
     }
 
     #[test]
@@ -160,11 +162,14 @@ mod crash_handler_gate_tests {
     }
 
     #[test]
-    fn remote_kill_switch_reads_struct_field() {
+    fn remote_cannot_enable_crash_handler() {
         let _g = guard();
+        let r = resolve_crash_handler_enabled(None, None, None, Some(&remote(Some(true))));
+        assert!(!r.value);
+        assert_eq!(r.source, ConfigSource::Default);
         let r = resolve_crash_handler_enabled(None, None, None, Some(&remote(Some(false))));
         assert!(!r.value);
-        assert_eq!(r.source, ConfigSource::Remote);
+        assert_eq!(r.source, ConfigSource::Default);
         let r = resolve_crash_handler_enabled(None, None, None, Some(&remote(None)));
         assert!(!r.value);
         assert_eq!(r.source, ConfigSource::Default);

@@ -8,7 +8,7 @@ use crate::{
     RemoteSettings,
     flags::{BoolFlag, ConfigSource, Resolved},
 };
-use xai_grok_config::env_bool;
+use xai_grok_config::env_bool_grog_or_grok;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, strum::EnumIter)]
 pub enum Feature {
@@ -74,7 +74,7 @@ impl FeatureSources {
     /// The environment tier read from the process; every other tier unset.
     pub fn from_process_env(feature: Feature) -> Self {
         Self {
-            env: env_bool(feature.env()),
+            env: env_bool_grog_or_grok(feature.env()),
             ..Self::default()
         }
     }
@@ -142,8 +142,8 @@ pub const FEATURES: &[FeatureSpec] = &[
         key: "feedback",
         path: "features.feedback",
         env: "GROK_FEEDBACK_ENABLED",
-        default_enabled: true,
-        remote: Some(|settings| settings.feedback_enabled),
+        default_enabled: false,
+        remote: None,
     },
     FeatureSpec {
         id: Feature::FeedbackTraceCard,
@@ -151,7 +151,7 @@ pub const FEATURES: &[FeatureSpec] = &[
         path: "features.feedback_trace_card",
         env: "GROK_FEEDBACK_TRACE_CARD",
         default_enabled: false,
-        remote: Some(|settings| settings.feedback_trace_card_enabled),
+        remote: None,
     },
     FeatureSpec {
         id: Feature::TurnSummary,
