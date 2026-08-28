@@ -37,6 +37,9 @@ pub fn consult_sync(auth: &CodexAuth, model: &str, prompt: &str) -> Result<Consu
         .bearer_auth(&tokens.access_token)
         .header("Content-Type", "application/json")
         .header("OpenAI-Beta", "responses=experimental")
+        // Honest client id: we are grog, not the official Codex CLI.
+        // The backend still sees the public Codex OAuth client id and
+        // ChatGPT subscription token imported from ~/.codex/auth.json.
         .header("originator", "grog")
         .json(&body);
     if !account.is_empty() {

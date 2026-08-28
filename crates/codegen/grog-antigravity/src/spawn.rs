@@ -54,12 +54,15 @@ pub fn provider_turn_argv(spec: ProviderTurnSpec<'_>) -> AgySpawnPlan {
     }
 }
 
-/// AskAntigravity: workspace only, no grog-tool MCP dir (blocks recursion).
+/// AskAntigravity: Plan mode (no writes) and no grog-tool MCP dir.
+/// `--dangerously-skip-permissions` stays so `-p` cannot hang on y/n
+/// (upstream antigravity-cli#318). Plan mode is the no-write escape;
+/// AcceptEdits is only for full `/model antigravity/…` turns.
 pub fn ask_agy_argv(spec: AskAntigravitySpec<'_>) -> AgySpawnPlan {
     provider_turn_argv(ProviderTurnSpec {
         prompt: spec.prompt,
         model: spec.model,
-        mode: AgyMode::AcceptEdits,
+        mode: AgyMode::Plan,
         skip_permissions: true,
         extra_add_dir: None,
         resume_conversation: None,
@@ -100,5 +103,10 @@ mod tests {
         });
         assert!(!plan.args.iter().any(|a| a == "--add-dir"));
         assert_eq!(plan.program, "/usr/bin/agy");
+        assert!(plan.args.windows(2).any(|w| w == ["--mode", "plan"]));
+        assert!(!plan
+            .args
+            .windows(2)
+            .any(|w| w == ["--mode", "accept-edits"]));
     }
 }

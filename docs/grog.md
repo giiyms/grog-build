@@ -9,7 +9,8 @@ repository.
 
 Native provider wiring is in the tree: `grog` launches the pager, `/model`
 lists `claude-bridge/`, `antigravity/`, and `codex/` ids, Ask* tools consult
-those backends, `/workflow council` fans out in parallel, and `grog doctor` /
+those backends, `/council` (and `/workflow council`) run a Karpathy-style
+three-stage deliberation, and `grog doctor` /
 `grog login [codex|claude|agy]` report PATH and Codex tokens. Home dir is
 `$GROG_HOME` or `~/.grog` (legacy `~/.grok` still wins if it already exists).
 Live `claude` / `agy` / Codex calls still require the user's own logins.
@@ -72,7 +73,7 @@ flowchart TB
   subgraph ui [Public surface]
     CLI["grog / grog -p / grog login"]
     TUI["Pager TUI"]
-    WF["/workflow council"]
+    WF["/council"]
   end
 
   subgraph runtime [Unchanged harness]
@@ -166,11 +167,10 @@ resolves `GROG_HOME` → `GROK_HOME` → `~/.grog` → migrate-from-`~/.grok`.
 
 ### Prompt and product copy
 
-System prompt currently says "You are Grok" /
-"You are a Grok Build subagent." Change the **product** name in prompts to
-Grog so the model does not claim to be xAI's Grok when the session is on
-Claude or Codex. Keep "Grok" only as a **model family** label when the active
-model is actually `grok-*`.
+System prompt currently says "You are Grog" (not "released by xAI"). Subagent
+templates say Grog. Keep "Grok" only as a **model family** label when the active
+model is actually `grok-*`. Override with `$GROG_SYSTEM_PROMPT_LABEL` (or the
+legacy `$GROK_SYSTEM_PROMPT_LABEL`).
 
 ### Privacy (landed)
 
@@ -317,9 +317,10 @@ depend on `@anthropic-ai/claude-agent-sdk` or the npm package.
   | field 30 → 4 | title |
 
   Step types in the DB (15 text, 14 thinking, 23 title, 5/7/8/9/17/21/33/101/132/138 tools). Status 3 = complete.
-- `agy -p` cannot answer y/n. Default `--dangerously-skip-permissions` or
-  the child hangs on `run_command`. Plan mode (`/agy mode plan`) is the
-  no-write escape. Do not combine `--sandbox` with skip-permissions.
+- `agy -p` cannot answer y/n. Full `/model` turns use `--dangerously-skip-permissions`
+  with AcceptEdits so the child cannot hang on `run_command`. **AskAntigravity and
+  council members use Plan mode** (the no-write escape) plus skip-permissions so
+  `-p` still cannot hang. Do not combine `--sandbox` with skip-permissions.
 - MCP for grog tools: **per-invocation** config dir passed as extra
   `--add-dir`. Never write `~/.gemini/config/mcp_config.json`. Bind
   127.0.0.1 + a per-session `x-bridge-token`. AskAntigravity inner agy
@@ -373,63 +374,45 @@ Crate `grog-antigravity`. Behavior above. First slice: protobuf decoder +
 250ms poll streaming + `/model antigravity/…`. Prerequisite: `agy` on
 `PATH`.
 
-## Phase 5 — Council workflows
+## Phase 5 — Council workflows (Karpathy)
 
-The workflow engine already fans out agents. `deep_research.rhai` is the
-template: `phase()`, parallel `agent()`, then a synthesizer. Subagents
-default to the parent model; **workflow `agent()` takes `model`**. Use that.
+The workflow engine already fans out agents. Council is a saved workflow plus
+a few runtime rules, not a new engine. The deliberation matches
+[Karpathy's llm-council](https://github.com/karpathy/llm-council):
 
-Council is a saved workflow plus a few runtime rules, not a new engine.
+1. **Opinions** — every member answers the user query independently, in parallel.
+2. **Review** — every successful member ranks **anonymized** copies (`Response A/B/C`).
+   Identities are hidden so models cannot play favorites. Each ranking must end
+   with `FINAL RANKING:` and a numbered list.
+3. **Verdict** — the chair sees **named** Stage 1 answers plus Stage 2 rankings
+   (and the A→model key) and writes one final answer.
 
-### `~/.grog/workflows/council.rhai` (built-in)
+Failed seats are noted; the chair continues with whoever answered. Nested
+Ask*/council recursion is denied. Members run **read-only isolated Ask**
+(Claude: Read/Glob/Grep/Web only; agy: **Plan** mode; Codex: text consult).
+Only the chair may write, and only if `args.apply == true`.
 
-```text
-meta: name = council
-phases: Brief → Deliberate → Rebut → Verdict
-```
-
-1. **Brief** — chair (current session model, or `council.chair`) writes a
-   shared brief and a JSON schema for member answers.
-2. **Deliberate** — `parallel` spawn of N members, each
-   `agent(brief, #{ model, capability_mode: "read-only", label })`.
-   Default slate from config, overridable per run:
-
-   ```toml
-   [council]
-   chair = "codex/gpt-5.3-codex"
-   members = [
-     "codex/gpt-5.3-codex",
-     "claude-bridge/claude-opus-4-6",
-     "antigravity/gemini-3.6-flash",
-     "http/grok-4.5",
-   ]
-   debate_rounds = 1
-   ```
-
-3. **Rebut** — optional second round: each member sees the others'
-   answers (still read-only).
-4. **Verdict** — chair synthesizes, with tools if the task is
-   implementation. Only the chair writes the repo unless the user opted
-   into `council.apply = true`.
-
-Launch:
+Default members: `claude-bridge/claude-opus-4-6`, `antigravity/gemini-3.6-flash`,
+`codex/gpt-5.3-codex`. Override with `args.members`, `args.chair`.
 
 ```text
-/workflow council implement the cache invalidation
-/council                    # slash alias
+/council implement the cache invalidation
+/workflow council {"query":"...", "members":["codex/gpt-5.3-codex"], "apply": false}
 grog -p --workflow council "..."
 ```
+
+`/council` is a first-class slash alias (same gate as `/deep-research`).
 
 ### Runtime rules the current engine does not quite give us
 
 | Need | Today | Change |
 | --- | --- | --- |
-| Mixed models in one workflow | `AgentOpts.model` exists | Honor it for bridged providers, not only HTTP ids |
-| Parallelism | Rhai `parallel` + host spawn | Cap by `council.max_parallel` and token budget |
+| Mixed models in one workflow | Landed — native ids go through grog-providers | |
+| Parallelism | Rhai `parallel` + host spawn | Optional later: cap by `council.max_parallel` |
 | Subagent depth | Children cannot spawn children | Keep it. Council members are workflow agents, not nested subagents |
-| Cross-member context | Each agent is a fresh session | Pass prior answers as prompt text (already how deep-research shares claims) |
-| Cost / fan-out | Easy to explode | Require an explicit `/council` (or workflow args) so the main agent cannot silently convene five frontier models |
-| Failures | One member 401s | Mark that seat failed; chair proceeds with who answered |
+| Cross-member context | Landed — Stage 2 is anonymized Response A/B/C; chair sees names | |
+| Cost / fan-out | Landed — `/council` is explicit | |
+| Failures | Landed — failed seats noted; chair proceeds | |
 
 ### `/council` vs letting the main agent call Ask\*
 
@@ -472,7 +455,7 @@ Work in this order so each slice is usable alone:
 6. **Full session bridges** — `/model claude-bridge/…` and
    `antigravity/…` with loopback MCP (Claude) and per-invocation agy
    `--add-dir` MCP (Antigravity).
-7. **Council workflow** — once at least two providers stream reliably.
+7. **Council workflow** — Karpathy Opinions → anonymous Review → chair Verdict. **Landed.**
 
 ## Doctor and UX
 
@@ -504,10 +487,13 @@ visible but disabled, with the doctor reason.
   patches so future syncs rebase.
 - **License / ToS.** Bridging Claude Code and agy uses those products' local
   CLIs under the user's existing accounts. Do not scrape hidden APIs when a
-  supported CLI exists. Codex OAuth should follow the same protocol the
-  official Codex CLI uses.
+  supported CLI exists. Codex OAuth follows the same protocol the official
+  Codex CLI uses (public client id, `chatgpt.com/backend-api`, import of
+  `~/.codex/auth.json`). The HTTP `originator` header is `grog` on purpose —
+  grog does not impersonate `codex_cli_rs`.
 
 ## First implementation slice
 
 Landed in this tree as native crates plus a `grog` binary name, provider
-wiring, council workflow, and privacy-max telemetry defaults.
+wiring, Karpathy council (`/council`), Grog identity in prompts, and
+privacy-max telemetry defaults. Rebase notes: [UPSTREAM.md](UPSTREAM.md).

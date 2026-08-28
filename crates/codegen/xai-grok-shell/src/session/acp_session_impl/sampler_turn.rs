@@ -1599,6 +1599,35 @@ fn grog_sampling_error(message: String) -> xai_grok_sampler::SamplingErrorInfo {
     }
 }
 
+/// Isolated Ask* (no vendor write loop) when the session cannot mutate the
+/// workspace. Council members and other `capability_mode: "read-only"` children
+/// must not spawn Claude/agy with AcceptEdits. `/model` on a native provider
+/// still uses a full provider turn because those sessions keep write tools.
+fn grog_native_uses_isolated_ask(tools: &[xai_grok_sampling_types::ToolSpec]) -> bool {
+    !tools.iter().any(|tool| tool_can_mutate_workspace(&tool.name))
+}
+
+fn tool_can_mutate_workspace(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    matches!(
+        n.as_str(),
+        "search_replace"
+            | "write_file"
+            | "str_replace"
+            | "apply_patch"
+            | "delete_file"
+            | "move_file"
+            | "run_terminal_command"
+            | "run_terminal_cmd"
+            | "bash"
+            | "execute"
+            | "shell"
+    ) || n.contains("search_replace")
+        || n.contains("write_file")
+        || n.contains("terminal_cmd")
+        || n.contains("terminal_command")
+}
+
 async fn grog_native_turn(
     request: ConversationRequest,
 ) -> Result<SamplerTurnOutcome, xai_grok_sampler::SamplingErrorInfo> {
@@ -1607,7 +1636,13 @@ async fn grog_native_turn(
         .clone()
         .unwrap_or_else(|| "unknown".to_string());
     let prompt = flatten_conversation_prompt(&request);
-    match grog_providers::consult::provider_turn(&model, &prompt).await {
+    let isolated = grog_native_uses_isolated_ask(&request.tools);
+    let result = if isolated {
+        grog_providers::consult::ask(&model, &prompt).await
+    } else {
+        grog_providers::consult::provider_turn(&model, &prompt).await
+    };
+    match result {
         Ok(outcome) => {
             let response = ConversationResponse {
                 items: vec![ConversationItem::assistant(outcome.text)],

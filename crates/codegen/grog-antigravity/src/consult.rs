@@ -1,4 +1,5 @@
-//! Live unmodified `agy -p` consult. First slice waits for exit and reads stdout.
+//! Live unmodified `agy -p` consult. Ask uses Plan mode (no writes) and
+//! waits for exit. Full provider turns use AcceptEdits.
 
 use std::process::Stdio;
 

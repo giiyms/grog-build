@@ -867,6 +867,75 @@ impl SessionActor {
                 }
                 ok_end_turn(0, None)
             }
+            BuiltinAction::Council { query } => {
+                if query.is_empty() {
+                    self.send_host_turn_slash_command_output(
+                        "Usage: /council <query>\nConvene Claude, Codex, and Antigravity: each \
+                         answers independently, then they rank anonymized responses, then the \
+                         chair synthesizes one recommendation.",
+                    )
+                    .await;
+                    return ok_end_turn(0, None);
+                }
+                let resolved = match crate::session::workflow::registry::resolve_by_name(
+                    "council",
+                    None,
+                ) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        self.send_host_turn_slash_command_output(&format!(
+                            "council workflow unavailable: {e}"
+                        ))
+                        .await;
+                        return ok_end_turn(0, None);
+                    }
+                };
+                let spec = crate::session::workflow::manager::LaunchSpec {
+                    objective: query.clone(),
+                    args: serde_json::json!({ "query": query, "objective": query }),
+                    agent_budget: None,
+                    effort: None,
+                    resume_run_id: None,
+                };
+                let launched = self.workflow_manager.lock().await.launch(resolved, spec);
+                match launched {
+                    Ok((run_id, outcome_rx)) => {
+                        let (display, objective) = self
+                            .workflow_tracker()
+                            .await
+                            .lock()
+                            .get(&run_id)
+                            .map(|r| (r.name.clone(), r.objective.clone()))
+                            .unwrap_or_else(|| ("council".to_string(), String::new()));
+                        self.push_workflow_launch_reminder(
+                            &display,
+                            &run_id,
+                            &objective,
+                            &format!("/council {objective}"),
+                            false,
+                        );
+                        self.send_host_turn_slash_command_output(&format!(
+                            "Council '{display}' started in the background. Members will answer \
+                             independently, rank anonymized copies of each other's work, and the \
+                             chair will return one recommendation. Use /workflow runs to follow \
+                             progress."
+                        ))
+                        .await;
+                        tokio::spawn(async move {
+                            if let Ok(outcome) = outcome_rx.await {
+                                tracing::info!(run_id, ?outcome, "council finished");
+                            }
+                        });
+                    }
+                    Err(e) => {
+                        self.send_host_turn_slash_command_output(&format!(
+                            "Could not start council: {e}"
+                        ))
+                        .await;
+                    }
+                }
+                ok_end_turn(0, None)
+            }
             BuiltinAction::WorkflowManage { run_id, op } => {
                 let msg = self.manage_workflow_run(&run_id, &op).await;
                 self.send_host_turn_slash_command_output(&msg).await;

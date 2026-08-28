@@ -64,11 +64,19 @@ mod builtin_tests {
             .map(|builtin| builtin.script)
             .expect("council builtin registered");
         assert!(script.contains("capability_mode: \"read-only\""));
-        assert!(script.contains("parallel(jobs)"));
+        assert!(script.contains("parallel(opinion_jobs)"));
+        assert!(script.contains("parallel(review_jobs)"));
         assert!(script.contains("claude-bridge/claude-opus-4-6"));
         assert!(script.contains("antigravity/gemini-3.6-flash"));
         assert!(script.contains("codex/gpt-5.3-codex"));
         assert!(script.contains("label: \"council-chair-verdict\""));
+        assert!(script.contains("phase(\"Opinions\")"));
+        assert!(script.contains("phase(\"Review\")"));
+        assert!(script.contains("phase(\"Verdict\")"));
+        assert!(script.contains("FINAL RANKING:"));
+        assert!(script.contains("Response A"));
+        assert!(!script.contains("phase(\"Brief\")"));
+        assert!(!script.contains("phase(\"Deliberate\")"));
         assert!(script.contains("complete(#{ report: report, status: \"ok\" })"));
     }
 }
