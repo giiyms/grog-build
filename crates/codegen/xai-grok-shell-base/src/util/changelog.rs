@@ -1,13 +1,10 @@
 //! Changelog fetching from CDN with local disk cache.
 //!
-//! Both markdown (`*.external.md`) and JSON (`*.external.json`) changelogs
-//! are published per-version to the CDN at `x.ai/cli/changelogs/`.
-//!
-//! `ChangelogManager::fetch()` retrieves both formats in parallel and
-//! returns a `Changelog` with optional markdown + structured entries.
-//! Consumers pick the format they need:
-//! - `/release-notes` uses `changelog.markdown` for rich scrollback display
-//! - Welcome screen uses `changelog.entries` for bullet rendering
+//! Upstream Grok Build publishes markdown (`*.external.md`) and JSON
+//! (`*.external.json`) changelogs per-version at `x.ai/cli/changelogs/`.
+//! Grog is a from-source fork: [`ChangelogManager::fetch`] does **not** hit
+//! that CDN (it would advertise grok upgrades). Tests may still seed a local
+//! cache via `GROK_CHANGELOG_OFFLINE` / `$GROK_HOME`.
 
 use std::path::PathBuf;
 
@@ -99,9 +96,12 @@ impl ChangelogManager {
     /// disk cache with malformed content (the markdown cache is write-through
     /// since it's consumed as raw text).
     pub fn fetch(&self) -> Changelog {
-        // Always re-resolve from env so a caller holding an older manager
-        // (or OnceLock lag) still reads the live harness home.
-        Self::from_env_home().fetch_with(changelog_offline(), CHANGELOG_BASE)
+        // Grog never pulls Grok Build notes from x.ai/cli. Tests may still
+        // seed a local cache via GROK_CHANGELOG_OFFLINE / GROK_HOME.
+        if grog_skips_xai_cli_changelog() && !changelog_offline() {
+            return grog_empty_changelog();
+        }
+        Self::from_env_home().fetch_with(true, CHANGELOG_BASE)
     }
 
     /// Fetch using this manager's already-resolved cache paths, an explicit
@@ -204,6 +204,20 @@ fn changelog_offline() -> bool {
     std::env::var_os("GROK_CHANGELOG_OFFLINE").is_some_and(|v| !v.is_empty() && v != "0")
 }
 
+/// Production welcome changelog: empty. Grog must not show Grok Build
+/// “updated” notes from `x.ai/cli/changelogs`.
+fn grog_empty_changelog() -> Changelog {
+    Changelog {
+        markdown: None,
+        entries: None,
+    }
+}
+
+/// Grog is a from-source fork; it must not check the x.ai changelog CDN.
+fn grog_skips_xai_cli_changelog() -> bool {
+    true
+}
+
 fn read_cache(path: &std::path::Path) -> Option<String> {
     std::fs::read_to_string(path)
         .ok()
@@ -251,6 +265,21 @@ mod tests {
         ChangelogManager {
             md_cache: home.join("CHANGELOG.md"),
             json_cache: home.join("CHANGELOG.json"),
+        }
+    }
+
+    #[test]
+    fn grog_does_not_advertise_xai_cli_changelogs() {
+        assert!(grog_skips_xai_cli_changelog());
+        let empty = grog_empty_changelog();
+        assert!(empty.markdown.is_none());
+        assert!(empty.entries.is_none());
+        if !changelog_offline() {
+            let fetched = ChangelogManager::new().fetch();
+            assert!(
+                fetched.markdown.is_none() && fetched.entries.is_none(),
+                "grog must not surface x.ai/cli changelog cards"
+            );
         }
     }
 

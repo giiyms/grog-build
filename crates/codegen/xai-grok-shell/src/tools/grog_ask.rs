@@ -26,8 +26,7 @@ fn session_model() -> Option<String> {
 }
 
 fn session_is(provider: grog_providers::ProviderId) -> bool {
-    session_model()
-        .is_some_and(|id| grog_providers::ModelRef::parse(&id).provider == provider)
+    session_model().is_some_and(|id| grog_providers::ModelRef::parse(&id).provider == provider)
 }
 
 pub fn ensure_registered() {
@@ -47,7 +46,7 @@ fn register_ask_tools(builder: &mut xai_grok_tools::registry::types::ToolRegistr
 pub struct AskConsultInput {
     /// Question or brief to send to the other model.
     pub prompt: String,
-    /// Optional catalog id (e.g. `claude-opus-4-6`). Default is the provider's first catalog entry.
+    /// Optional catalog id (e.g. `claude-opus-5`). Default is the provider's first catalog entry.
     #[serde(default)]
     pub model: Option<String>,
 }
@@ -121,7 +120,8 @@ macro_rules! ask_tool {
                     .model
                     .filter(|m| !m.trim().is_empty())
                     .unwrap_or_else(|| $default_model.to_string());
-                match grog_providers::consult::ask(&model, &input.prompt).await {
+                let effort = grog_providers::default_effort(&model);
+                match grog_providers::consult::ask_with_effort(&model, &input.prompt, effort).await {
                     Ok(out) => Ok(ToolOutput::Text(out.text.into())),
                     Err(err) => Err(xai_tool_runtime::ToolError::execution(
                         xai_tool_protocol::ToolId::new($id).expect("valid"),
@@ -138,19 +138,19 @@ ask_tool!(
     "AskClaude",
     "Consult Claude Code (print-mode `claude`) for a second opinion. Auth is the user's Claude CLI, not grog. Disabled when /model is already a claude-bridge id.",
     grog_providers::ProviderId::ClaudeBridge,
-    "claude-bridge/claude-opus-4-6"
+    grog_providers::grog_claude_bridge::DEFAULT_CLAUDE_QUALIFIED
 );
 ask_tool!(
     AskAntigravityTool,
     "AskAntigravity",
     "Consult Google Antigravity (`agy -p`) for a second opinion. Auth is agy's Google login, not grog. Disabled when /model is already an antigravity id.",
     grog_providers::ProviderId::Antigravity,
-    "antigravity/gemini-3.6-flash"
+    grog_providers::grog_antigravity::DEFAULT_ANTIGRAVITY_QUALIFIED
 );
 ask_tool!(
     AskCodexTool,
     "AskCodex",
     "Consult ChatGPT Codex via the user's Codex/ChatGPT subscription (not an OpenAI API key). Disabled when /model is already a codex id.",
     grog_providers::ProviderId::Codex,
-    "codex/gpt-5.3-codex"
+    grog_providers::grog_codex::DEFAULT_CODEX_QUALIFIED
 );

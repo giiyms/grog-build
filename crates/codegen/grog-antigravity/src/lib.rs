@@ -9,12 +9,16 @@ pub mod models;
 pub mod protobuf;
 pub mod spawn;
 
-pub use models::{slugify_model, AntigravityModel, ANTIGRAVITY_FALLBACK_MODELS};
-pub use protobuf::{
-    extract_agent_text, extract_title, extract_tool_call, walk_fields, DecodedStep, Field,
-    ProtobufError, ToolCall,
+pub use consult::{ConsultError, ConsultResult, ask_agy, provider_turn, run_print_plan};
+pub use models::{
+    ANTIGRAVITY_FALLBACK_MODELS, AntigravityModel, DEFAULT_ANTIGRAVITY_EFFORT,
+    DEFAULT_ANTIGRAVITY_MODEL, DEFAULT_ANTIGRAVITY_QUALIFIED, agy_effort_flag, slugify_model,
 };
-pub use consult::{ask_agy, provider_turn, run_print_plan, ConsultError, ConsultResult};
+pub use protobuf::{
+    DecodedStep, Field, ProtobufError, ToolCall, extract_agent_text, extract_title,
+    extract_tool_call, walk_fields,
+};
 pub use spawn::{
-    ask_agy_argv, provider_turn_argv, AgyMode, AgySpawnPlan, AskAntigravitySpec, ProviderTurnSpec,
+    AgyMode, AgySpawnPlan, AskAntigravitySpec, ProviderTurnSpec, ask_agy_argv, prompt_from_args,
+    provider_turn_argv,
 };

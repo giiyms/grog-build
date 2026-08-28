@@ -20,7 +20,7 @@ renames and stays in a few places.
 | --- | --- |
 | Native providers | `crates/codegen/grog-*` (`grog-providers`, `grog-claude-bridge`, `grog-antigravity`, `grog-codex`) |
 | Council workflow | `crates/codegen/xai-grok-shell/src/session/workflows/council.rhai` |
-| Thin identity patches | pager bin name, `~/.grog` / `$GROG_HOME`, prompts saying **Grog**, privacy defaults, `/council` slash alias, native-turn intercept |
+| Thin identity patches | pager bin name, `~/.grog` / `$GROG_HOME`, prompts saying **Grog**, privacy defaults, `/council` slash alias, native-turn intercept, **no x.ai/cli updater** (`grog --version`, skip grok update toast/changelog CDN) |
 | Product docs | `docs/grog.md`, this file |
 
 Thin patches should stay small so the next dump rebases. Prefer a new grog
@@ -43,7 +43,7 @@ Conflicts usually land in:
   from `crates/codegen/xai-grok-agent` after resolving prompt.md)
 
 After a dump, `cargo test -p grog-providers -p grog-claude-bridge -p grog-antigravity -p grog-codex`
-and `cargo test -p xai-grok-shell --lib council_fans_out -- council_projects`
+and `cargo test -p xai-grok-shell --lib council_fans_out -- council_projects -- degraded_membership`
 plus `cargo check -p xai-grok-pager-bin`.
 
 ## Build and install grog (not the x.ai installer)
@@ -58,6 +58,11 @@ install -m 755 target/release/xai-grok-pager "$HOME/.local/bin/grog"
 grog --version
 grog doctor
 ```
+
+`grog --version` prints `grog …`. Grog does **not** check x.ai/cli for grok
+upgrades and does not show the official Grok Build “update available”
+banner. Rebuild from source to update grog. Official `grok`
+(`~/.grok/bin/grok`) is a separate binary.
 
 `grok` remains a valid argv0 alias during the transition.
 

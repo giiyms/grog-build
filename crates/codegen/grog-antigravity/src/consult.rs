@@ -6,7 +6,9 @@ use std::process::Stdio;
 use tokio::io::{AsyncReadExt, BufReader};
 use tokio::process::Command;
 
-use crate::spawn::{ask_agy_argv, provider_turn_argv, AgyMode, AskAntigravitySpec, ProviderTurnSpec};
+use crate::spawn::{
+    AgyMode, AskAntigravitySpec, ProviderTurnSpec, ask_agy_argv, provider_turn_argv,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsultResult {
@@ -31,16 +33,25 @@ pub enum ConsultError {
     Empty { program: String },
 }
 
-pub async fn ask_agy(prompt: &str, model: &str) -> Result<ConsultResult, ConsultError> {
+pub async fn ask_agy(
+    prompt: &str,
+    model: &str,
+    effort: Option<&str>,
+) -> Result<ConsultResult, ConsultError> {
     let plan = ask_agy_argv(AskAntigravitySpec {
         prompt,
         model,
         agy_bin: None,
+        effort,
     });
     run_print_plan(&plan.program, &plan.args).await
 }
 
-pub async fn provider_turn(prompt: &str, model: &str) -> Result<ConsultResult, ConsultError> {
+pub async fn provider_turn(
+    prompt: &str,
+    model: &str,
+    effort: Option<&str>,
+) -> Result<ConsultResult, ConsultError> {
     let plan = provider_turn_argv(ProviderTurnSpec {
         prompt,
         model,
@@ -49,6 +60,7 @@ pub async fn provider_turn(prompt: &str, model: &str) -> Result<ConsultResult, C
         extra_add_dir: None,
         resume_conversation: None,
         agy_bin: None,
+        effort,
     });
     run_print_plan(&plan.program, &plan.args).await
 }

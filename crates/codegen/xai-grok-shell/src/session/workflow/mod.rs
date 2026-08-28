@@ -66,9 +66,15 @@ mod builtin_tests {
         assert!(script.contains("capability_mode: \"read-only\""));
         assert!(script.contains("parallel(opinion_jobs)"));
         assert!(script.contains("parallel(review_jobs)"));
-        assert!(script.contains("claude-bridge/claude-opus-4-6"));
-        assert!(script.contains("antigravity/gemini-3.6-flash"));
-        assert!(script.contains("codex/gpt-5.3-codex"));
+        assert!(script.contains("claude-bridge/claude-opus-5"));
+        assert!(script.contains("antigravity/gemini-3.7-flash-high"));
+        assert!(script.contains("codex/gpt-5.6-luna"));
+        assert!(!script.contains("codex/gpt-5.3-codex"));
+        assert!(!script.contains("codex/gpt-5.1-codex"));
+        assert!(script.contains("effort: member_effort"));
+        assert!(script.contains("return \"xhigh\""));
+        assert!(script.contains("return \"medium\""));
+        assert!(script.contains("return \"high\""));
         assert!(script.contains("\"council-chair-verdict\""));
         assert!(script.contains("phase(\"Opinions\")"));
         assert!(script.contains("phase(\"Review\")"));
@@ -78,5 +84,15 @@ mod builtin_tests {
         assert!(!script.contains("phase(\"Brief\")"));
         assert!(!script.contains("phase(\"Deliberate\")"));
         assert!(script.contains("complete(#{ report: report, status: \"ok\" })"));
+        assert!(
+            script.contains("type_of(out) == \"string\""),
+            "trimmed() must not return the unit value of trim()"
+        );
+        assert!(!script.contains("return s.trim();"));
+        assert!(script.contains("Skipped anonymous review"));
+        assert!(script.contains("# Council verdict"));
     }
 }
+
+#[cfg(test)]
+mod council_run_tests;

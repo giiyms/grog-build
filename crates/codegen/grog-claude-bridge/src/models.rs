@@ -31,8 +31,21 @@ pub struct ClaudeBridgeModel {
     pub display_name: &'static str,
 }
 
-/// Picker order. `opus` resolves to the first opus entry (`claude-opus-4-6`).
+/// Claude Code `--model` id for Opus 5 (current Opus).
+pub const DEFAULT_CLAUDE_MODEL: &str = "claude-opus-5";
+
+/// Qualified `provider/model` form of [`DEFAULT_CLAUDE_MODEL`].
+pub const DEFAULT_CLAUDE_QUALIFIED: &str = "claude-bridge/claude-opus-5";
+
+/// Claude Code `--effort` for AskClaude / council (not a higher thinking tier).
+pub const DEFAULT_CLAUDE_EFFORT: &str = "medium";
+
+/// Picker order. `opus` resolves to the first opus entry ([`DEFAULT_CLAUDE_MODEL`]).
 pub const CLAUDE_BRIDGE_MODELS: &[ClaudeBridgeModel] = &[
+    ClaudeBridgeModel {
+        id: "claude-opus-5",
+        display_name: "Opus 5",
+    },
     ClaudeBridgeModel {
         id: "claude-opus-4-6",
         display_name: "Opus 4.6",
@@ -68,6 +81,10 @@ pub struct CliModel {
 pub fn resolve_cli_model(id: &str, settings: LongContextSettings) -> CliModel {
     let one_m_paid = settings.plan == Plan::Max || settings.extra_usage;
     match id {
+        "claude-opus-5" => CliModel {
+            cli_id: "claude-opus-5",
+            context_window: CTX_1M,
+        },
         "claude-opus-4-7" => CliModel {
             cli_id: "claude-opus-4-7",
             context_window: CTX_1M,
@@ -136,6 +153,17 @@ impl AskClaudeMode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn opus_5_is_current_opus_without_1m_suffix() {
+        let m = resolve_cli_model("claude-opus-5", LongContextSettings::default());
+        assert_eq!(m.cli_id, "claude-opus-5");
+        assert_eq!(m.context_window, CTX_1M);
+        assert_eq!(DEFAULT_CLAUDE_MODEL, "claude-opus-5");
+        assert_eq!(DEFAULT_CLAUDE_QUALIFIED, "claude-bridge/claude-opus-5");
+        assert_eq!(DEFAULT_CLAUDE_EFFORT, "medium");
+        assert_eq!(CLAUDE_BRIDGE_MODELS[0].id, DEFAULT_CLAUDE_MODEL);
+    }
 
     #[test]
     fn opus_47_is_1m_without_suffix() {

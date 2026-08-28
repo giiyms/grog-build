@@ -1,6 +1,6 @@
 //! ChatGPT Codex backend consult (Responses-shaped). Not `api.openai.com`.
 
-use crate::auth::{chatgpt_account_id, CodexAuth, AUTH_ISSUER, CODEX_BACKEND, CODEX_CLIENT_ID};
+use crate::auth::{AUTH_ISSUER, CODEX_BACKEND, CODEX_CLIENT_ID, CodexAuth, chatgpt_account_id};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsultResult {
@@ -19,19 +19,32 @@ pub enum ClientError {
     Empty,
 }
 
-pub fn consult_sync(auth: &CodexAuth, model: &str, prompt: &str) -> Result<ConsultResult, ClientError> {
+/// Responses-shaped body for a Codex consult. `reasoning.effort` is the
+/// Codex thinking flag (`xhigh` for Luna council / AskCodex).
+pub fn consult_body(model: &str, prompt: &str, effort: &str) -> serde_json::Value {
+    serde_json::json!({
+        "model": model,
+        "input": prompt,
+        "store": false,
+        "stream": false,
+        "reasoning": { "effort": effort },
+    })
+}
+
+pub fn consult_sync(
+    auth: &CodexAuth,
+    model: &str,
+    prompt: &str,
+    effort: Option<&str>,
+) -> Result<ConsultResult, ClientError> {
     let tokens = auth.tokens.as_ref().ok_or(ClientError::NoToken)?;
     if tokens.access_token.is_empty() {
         return Err(ClientError::NoToken);
     }
     let account = chatgpt_account_id(auth).unwrap_or_default();
     let url = format!("{CODEX_BACKEND}/codex/responses");
-    let body = serde_json::json!({
-        "model": model,
-        "input": prompt,
-        "store": false,
-        "stream": false,
-    });
+    let effort = effort.unwrap_or(crate::DEFAULT_CODEX_EFFORT);
+    let body = consult_body(model, prompt, effort);
     let mut builder = reqwest::blocking::Client::new()
         .post(&url)
         .bearer_auth(&tokens.access_token)
@@ -45,9 +58,13 @@ pub fn consult_sync(auth: &CodexAuth, model: &str, prompt: &str) -> Result<Consu
     if !account.is_empty() {
         builder = builder.header("ChatGPT-Account-Id", account);
     }
-    let resp = builder.send().map_err(|e| ClientError::Transport(e.to_string()))?;
+    let resp = builder
+        .send()
+        .map_err(|e| ClientError::Transport(e.to_string()))?;
     let status = resp.status().as_u16();
-    let json: serde_json::Value = resp.json().map_err(|e| ClientError::Transport(e.to_string()))?;
+    let json: serde_json::Value = resp
+        .json()
+        .map_err(|e| ClientError::Transport(e.to_string()))?;
     if !(200..300).contains(&status) {
         return Err(ClientError::Http {
             status,
@@ -77,7 +94,9 @@ pub fn refresh_sync(auth: &CodexAuth) -> Result<CodexAuth, ClientError> {
         .send()
         .map_err(|e| ClientError::Transport(e.to_string()))?;
     let status = resp.status().as_u16();
-    let json: serde_json::Value = resp.json().map_err(|e| ClientError::Transport(e.to_string()))?;
+    let json: serde_json::Value = resp
+        .json()
+        .map_err(|e| ClientError::Transport(e.to_string()))?;
     if !(200..300).contains(&status) {
         return Err(ClientError::Http {
             status,
@@ -138,5 +157,14 @@ mod tests {
             "output": [{"content": [{"text": "a"}, {"text": "b"}]}]
         });
         assert_eq!(extract_output_text(&v).as_deref(), Some("ab"));
+    }
+
+    #[test]
+    fn consult_body_sends_luna_xhigh_reasoning_effort() {
+        let body = consult_body("gpt-5.6-luna", "hello", crate::DEFAULT_CODEX_EFFORT);
+        assert_eq!(body["model"], "gpt-5.6-luna");
+        assert_eq!(body["reasoning"]["effort"], "xhigh");
+        assert_ne!(body["model"], "gpt-5.3-codex");
+        assert_ne!(body["model"], "gpt-5.1-codex");
     }
 }

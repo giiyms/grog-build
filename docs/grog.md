@@ -139,6 +139,12 @@ Change:
 3. Point `install.sh` / `install.ps1` at `grog`. Keep installing `grok` as a
    symlink for one release if local muscle memory matters.
 4. Terminal title, `/help` about-text, version string: `grog`.
+   `grog --version` prints `grog <version> (<commit>)`, not `grok …`.
+5. **No x.ai/cli updater.** Grog is from-source. It must not show Grok Build
+   “updated” / “update available” chrome, must not check x.ai/cli artifacts,
+   and must not advertise grok upgrades. Official `grok` at `~/.grok` is a
+   different binary and stays out of scope. `grog update` explains the
+   from-source rebuild path instead of installing grok.
 
 Local from-source:
 
@@ -225,8 +231,21 @@ There is **no** Node host and **no** `grog plugin install npm:…` path for
 inference. Pi packages are reference material only.
 
 `/model` and `grog models` list `provider/model` ids
-(`claude-bridge/claude-opus-4-6`, `antigravity/gemini-3.6-flash`,
-`codex/gpt-5.3-codex`).
+(`claude-bridge/claude-opus-5`, `antigravity/gemini-3.7-flash-high`,
+`codex/gpt-5.6-luna`). Defaults (Ask\* / council seats; older catalog
+ids stay pickable):
+
+| Seat | Catalog id | Thinking |
+| --- | --- | --- |
+| Codex | `codex/gpt-5.6-luna` | Responses `reasoning.effort` **xhigh** (Codex CLI: none/low/medium/high/**xhigh**/max) |
+| Claude | `claude-bridge/claude-opus-5` | Claude Code `--effort medium` |
+| agy | `antigravity/gemini-3.7-flash-high` | agy `--effort high` (agy only accepts low/medium/**high**; Flash slugs also bake `-low`/`-medium`/`-high`) |
+
+Do not default council or AskCodex to `gpt-5.3-codex` — consumer ChatGPT
+accounts reject that id (API-org accounts can still pick it from the
+catalog). Do not default agy to `gemini-3.6-flash` or a medium thinking
+slug. After login, prefer an id the Codex provider advertised
+(`select_codex_model_id`) rather than a hardcoded forbidden id.
 
 Config sketch:
 
@@ -248,7 +267,7 @@ enabled = true
 command = "agy"         # Google Cloud Code Assist CLI
 
 [models]
-default = "codex/gpt-5.3-codex"
+default = "codex/gpt-5.6-luna"   # ChatGPT Plus/Pro Codex; not gpt-5.3-codex
 ```
 
 ### Ask* tools
@@ -321,12 +340,25 @@ depend on `@anthropic-ai/claude-agent-sdk` or the npm package.
   with AcceptEdits so the child cannot hang on `run_command`. **AskAntigravity and
   council members use Plan mode** (the no-write escape) plus skip-permissions so
   `-p` still cannot hang. Do not combine `--sandbox` with skip-permissions.
+- **Argv order:** Google's Go flag parser treats `-p`/`--print` as a
+  value-taking flag (the next token is the prompt). Spawn **flags first**,
+  then `-p` immediately followed by the user query:
+  `agy --model <slug> --mode plan --dangerously-skip-permissions --effort high -p "<query>"`.
+  Never put `--model` (or any other flag) after `-p` — agy will treat that
+  flag as the prompt and never start the real question.
 - MCP for grog tools: **per-invocation** config dir passed as extra
   `--add-dir`. Never write `~/.gemini/config/mcp_config.json`. Bind
   127.0.0.1 + a per-session `x-bridge-token`. AskAntigravity inner agy
   does **not** get that dir (recursion).
-- Catalog comes from `agy models` (slugify display names). Keep a fallback
-  list if discovery fails so the picker is not empty.
+- Catalog comes from `agy models`. Keep a fallback list if discovery fails
+  so the picker is not empty. Fallback ids match the dotted `agy --model`
+  catalog (`gemini-3.7-flash-high`, `gemini-3.6-flash-high`, …), not the
+  pi slugify form (`gemini-3-7-flash-high`).
+- **Thinking:** agy exposes `--effort low|medium|high` (no xhigh/max).
+  Flash models also bake effort into the slug. AskAntigravity and council
+  use **`gemini-3.7-flash-high`** plus **`--effort high`** (the max agy
+  supports), still in **Plan** mode. `--effort` is a flag and must precede
+  `-p`.
 
 Native crate: spawn, discover DB, decode protobuf, poll. rusqlite in grog,
 not Node's `node:sqlite`.
@@ -392,12 +424,21 @@ Ask*/council recursion is denied. Members run **read-only isolated Ask**
 (Claude: Read/Glob/Grep/Web only; agy: **Plan** mode; Codex: text consult).
 Only the chair may write, and only if `args.apply == true`.
 
-Default members: `claude-bridge/claude-opus-4-6`, `antigravity/gemini-3.6-flash`,
-`codex/gpt-5.3-codex`. Override with `args.members`, `args.chair`.
+Default members: `claude-bridge/claude-opus-5` (medium thinking),
+`antigravity/gemini-3.7-flash-high` (`--effort high`, Plan mode),
+`codex/gpt-5.6-luna` (`reasoning.effort` xhigh). Override with
+`args.members`, `args.chair`. Codex defaults to `gpt-5.6-luna` because
+ChatGPT Plus/Pro Codex subscriptions reject `gpt-5.3-codex`.
+
+When it works, `/council` returns a visible product: the independent
+answers, a ranking stage **when more than one seat answered**, and a chair
+synthesis. If only one seat starts (degraded membership), review is skipped
+but the report still includes that seat's answer plus the chair note — never
+a null report.
 
 ```text
 /council implement the cache invalidation
-/workflow council {"query":"...", "members":["codex/gpt-5.3-codex"], "apply": false}
+/workflow council {"query":"...", "members":["codex/gpt-5.6-luna"], "apply": false}
 grog -p --workflow council "..."
 ```
 
