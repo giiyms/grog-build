@@ -7177,6 +7177,7 @@ fn resolve_model_list_empty_prefetch_yields_empty_base() {
     );
     assert!(resolved.contains_key("claude-bridge/claude-opus-4-6"));
     assert!(resolved.contains_key("antigravity/gemini-3.6-flash"));
+    assert!(resolved.contains_key("codex/gpt-5.1-codex"));
     assert!(resolved.contains_key("codex/gpt-5.3-codex"));
 }
 #[test]

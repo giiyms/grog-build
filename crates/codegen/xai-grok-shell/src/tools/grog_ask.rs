@@ -26,8 +26,7 @@ fn session_model() -> Option<String> {
 }
 
 fn session_is(provider: grog_providers::ProviderId) -> bool {
-    session_model()
-        .is_some_and(|id| grog_providers::ModelRef::parse(&id).provider == provider)
+    session_model().is_some_and(|id| grog_providers::ModelRef::parse(&id).provider == provider)
 }
 
 pub fn ensure_registered() {
@@ -152,5 +151,5 @@ ask_tool!(
     "AskCodex",
     "Consult ChatGPT Codex via the user's Codex/ChatGPT subscription (not an OpenAI API key). Disabled when /model is already a codex id.",
     grog_providers::ProviderId::Codex,
-    "codex/gpt-5.3-codex"
+    grog_providers::grog_codex::DEFAULT_CODEX_QUALIFIED
 );

@@ -1144,7 +1144,7 @@ async fn run_agent_command(
     let is_leader = matches!(agent_args.mode, Some(AgentCmd::Leader(_)));
     if !is_stdio && !is_leader {
         eprintln!(
-            "Grok Build (pager) - v{}",
+            "Grog (pager) - v{}",
             xai_grok_version::display_version_with_commit(
                 env!("VERSION_WITH_COMMIT"),
                 xai_grok_update::channel_label(),
@@ -1843,7 +1843,8 @@ fn install_heap_profile_hooks() {
 }
 fn version_text(channel_label: &str) -> String {
     format!(
-        "grok {}\n",
+        "{} {}\n",
+        xai_grok_version::PRODUCT_CLI_NAME,
         xai_grok_version::display_version_with_commit(
             xai_grok_version::full_version(),
             channel_label,
@@ -2047,6 +2048,7 @@ async fn async_main(args: PagerArgs) -> Result<()> {
             Command::Version { json } => {
                 if json {
                     let payload = serde_json::json!({
+                        "name": xai_grok_version::PRODUCT_CLI_NAME,
                         "currentVersion": env!("VERSION_WITH_COMMIT"),
                         "channel": xai_grok_update::channel_name().unwrap_or("unknown"),
                     });
@@ -2411,9 +2413,28 @@ fn build_update_config() -> UpdateConfig {
     }
     config
 }
+/// Grog is a from-source fork. It must not check x.ai/cli artifacts or
+/// advertise grok upgrades. Official `grok` (`~/.grok/bin/grok`) is a
+/// different binary and is out of scope.
+fn grog_skips_xai_cli_updater() -> bool {
+    true
+}
+
+/// Human-readable copy for `grog update` / `--check`. Never tells the
+/// user that a grok upgrade is available.
+fn grog_update_unavailable_message() -> &'static str {
+    "grog is a from-source fork and does not use the x.ai/cli updater.\n\
+     Official grok (typically ~/.grok/bin/grok) is a separate binary.\n\
+     To update grog, rebuild from source:\n\
+     cargo build -p xai-grok-pager-bin --release"
+}
+
 /// Central gate for auto-update checks; add new suppression rules here,
 /// not at call sites.
 fn should_check_for_updates(no_auto_update_flag: bool) -> bool {
+    if grog_skips_xai_cli_updater() {
+        return false;
+    }
     if cfg!(debug_assertions) {
         return false;
     }
@@ -2489,6 +2510,24 @@ async fn run_update_command(
     trigger: auto_update::CliUpdateTrigger,
     base_update_config: &UpdateConfig,
 ) -> Result<()> {
+    if grog_skips_xai_cli_updater() {
+        if json {
+            if !check {
+                anyhow::bail!("--json requires --check");
+            }
+            println!(
+                "{}",
+                serde_json::json!({
+                    "name": xai_grok_version::PRODUCT_CLI_NAME,
+                    "update_available": false,
+                    "reason": "grog is a from-source fork and does not use the x.ai/cli updater",
+                })
+            );
+            return Ok(());
+        }
+        println!("{}", grog_update_unavailable_message());
+        return Ok(());
+    }
     if json && !check {
         anyhow::bail!("--json requires --check");
     }
@@ -2695,7 +2734,8 @@ mod tests {
             let mut output = Vec::new();
             write_version(&mut output, label).unwrap();
             let output = String::from_utf8(output).unwrap();
-            assert!(output.starts_with("grok "));
+            assert!(output.starts_with("grog "));
+            assert!(!output.starts_with("grok "));
             assert!(output.contains(env!("VERSION_WITH_COMMIT")));
             assert!(output.ends_with(expected_suffix), "{output:?}");
         }
@@ -2910,6 +2950,21 @@ mod tests {
             !stdio_auto_update_enabled(true, false, true, false),
             "pinned binary"
         );
+    }
+
+    #[test]
+    fn grog_never_checks_xai_cli_updater() {
+        assert!(grog_skips_xai_cli_updater());
+        assert!(
+            !should_check_for_updates(false),
+            "grog must not probe x.ai/cli even without --no-auto-update"
+        );
+        assert!(!should_check_for_updates(true));
+        let msg = grog_update_unavailable_message();
+        assert!(msg.contains("from-source"));
+        assert!(msg.contains("x.ai/cli"));
+        assert!(!msg.contains("A new version of Grok"));
+        assert!(!msg.contains("Grok Build is available"));
     }
     use clap::Parser as _;
     /// `grok dashboard` flags the startup hook without forcing leader mode —

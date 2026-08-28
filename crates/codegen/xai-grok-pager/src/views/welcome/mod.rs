@@ -428,11 +428,11 @@ impl WelcomeLayout {
 
 /// Controls what the version badge renders.
 pub(super) enum VersionBadgeMode<'a> {
-    /// Full badge: team | tier | api_key | **Grok Build** VERSION+channel (right-aligned).
+    /// Full badge: team | tier | api_key | **Grog** VERSION+channel (right-aligned).
     Full { subscription_tier: Option<&'a str> },
     /// Hero footer: team | api_key | channel (right-aligned, gray).
     HeroFooter,
-    /// Hero inline: **Grok Build**  VERSION (left-aligned).
+    /// Hero inline: **Grog**  VERSION (left-aligned).
     HeroInline,
 }
 
@@ -489,7 +489,7 @@ pub(super) fn render_version_badge(
     match &mode {
         VersionBadgeMode::Full { .. } => {
             spans.push(Span::styled(
-                "Grok Build  ",
+                format!("{}  ", xai_grok_version::PRODUCT_DISPLAY_NAME),
                 Style::default()
                     .fg(theme.text_primary)
                     .add_modifier(Modifier::BOLD),
@@ -509,7 +509,7 @@ pub(super) fn render_version_badge(
         }
         VersionBadgeMode::HeroInline => {
             spans.push(Span::styled(
-                "Grok Build  ",
+                format!("{}  ", xai_grok_version::PRODUCT_DISPLAY_NAME),
                 Style::default()
                     .fg(theme.text_primary)
                     .add_modifier(Modifier::BOLD),
@@ -2752,8 +2752,10 @@ mod tests {
                 "badge must not label the product: {rendered:?}"
             );
         }
-        assert!(full.contains("Grok Build"), "full badge: {full:?}");
-        assert!(inline.contains("Grok Build"), "inline badge: {inline:?}");
+        assert!(full.contains("Grog"), "full badge: {full:?}");
+        assert!(!full.contains("Grok Build"), "full badge: {full:?}");
+        assert!(inline.contains("Grog"), "inline badge: {inline:?}");
+        assert!(!inline.contains("Grok Build"), "inline badge: {inline:?}");
         assert!(footer.contains("acme"), "footer keeps the team: {footer:?}");
         assert!(
             !footer.ends_with('\u{2502}'),

@@ -4,7 +4,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::auth::{parse_auth_json, CodexAuth, CodexAuthError};
+use crate::auth::{CodexAuth, CodexAuthError, parse_auth_json};
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {

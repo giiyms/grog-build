@@ -813,6 +813,24 @@ mod tests {
     }
 
     #[test]
+    fn summarize_result_keeps_council_chair_report() {
+        let text = summarize_result(&serde_json::json!({
+            "report": "pipeline works, but membership is degraded",
+            "status": "ok"
+        }));
+        assert_eq!(text, "pipeline works, but membership is degraded");
+        let null_report = summarize_result(&serde_json::json!({
+            "report": null,
+            "status": "ok"
+        }));
+        assert!(
+            !null_report.is_empty(),
+            "a null report field must not become an empty summary"
+        );
+        assert_ne!(null_report, "pipeline works, but membership is degraded");
+    }
+
+    #[test]
     fn rebind_agent_id_points_row_at_retry_child_and_bumps_revision() {
         let (mut t, id) = tracker_with_run();
         t.agent_started(

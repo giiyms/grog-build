@@ -93,6 +93,11 @@ See ~/.grok/README.md for more information.
     /// Export or upload session trace data
     Trace(crate::trace_cmd::TraceArgs),
     /// Check for updates or install a specific version
+    ///
+    /// Hidden on grog: this fork does not use the x.ai/cli updater. The
+    /// subcommand still exists so `grog update` can print that copy instead
+    /// of silently hitting grok artifact URLs.
+    #[command(hide = true)]
     Update {
         /// Check for updates without installing.
         #[arg(long)]

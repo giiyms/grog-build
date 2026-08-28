@@ -139,6 +139,12 @@ Change:
 3. Point `install.sh` / `install.ps1` at `grog`. Keep installing `grok` as a
    symlink for one release if local muscle memory matters.
 4. Terminal title, `/help` about-text, version string: `grog`.
+   `grog --version` prints `grog <version> (<commit>)`, not `grok …`.
+5. **No x.ai/cli updater.** Grog is from-source. It must not show Grok Build
+   “updated” / “update available” chrome, must not check x.ai/cli artifacts,
+   and must not advertise grok upgrades. Official `grok` at `~/.grok` is a
+   different binary and stays out of scope. `grog update` explains the
+   from-source rebuild path instead of installing grok.
 
 Local from-source:
 
@@ -226,7 +232,12 @@ inference. Pi packages are reference material only.
 
 `/model` and `grog models` list `provider/model` ids
 (`claude-bridge/claude-opus-4-6`, `antigravity/gemini-3.6-flash`,
-`codex/gpt-5.3-codex`).
+`codex/gpt-5.1-codex`). The Codex default is **`codex/gpt-5.1-codex`**,
+which ChatGPT Plus/Pro Codex subscriptions can run. Do not default
+council or AskCodex to `gpt-5.3-codex` — consumer ChatGPT accounts reject
+that id (API-org accounts can still pick it from the catalog). After login,
+prefer an id the Codex provider advertised (`select_codex_model_id`)
+rather than a hardcoded forbidden id.
 
 Config sketch:
 
@@ -248,7 +259,7 @@ enabled = true
 command = "agy"         # Google Cloud Code Assist CLI
 
 [models]
-default = "codex/gpt-5.3-codex"
+default = "codex/gpt-5.1-codex"   # ChatGPT Plus/Pro Codex; not gpt-5.3-codex
 ```
 
 ### Ask* tools
@@ -321,6 +332,12 @@ depend on `@anthropic-ai/claude-agent-sdk` or the npm package.
   with AcceptEdits so the child cannot hang on `run_command`. **AskAntigravity and
   council members use Plan mode** (the no-write escape) plus skip-permissions so
   `-p` still cannot hang. Do not combine `--sandbox` with skip-permissions.
+- **Argv order:** Google's Go flag parser treats `-p`/`--print` as a
+  value-taking flag (the next token is the prompt). Spawn **flags first**,
+  then `-p` immediately followed by the user query:
+  `agy --model <slug> --mode plan --dangerously-skip-permissions -p "<query>"`.
+  Never put `--model` (or any other flag) after `-p` — agy will treat that
+  flag as the prompt and never start the real question.
 - MCP for grog tools: **per-invocation** config dir passed as extra
   `--add-dir`. Never write `~/.gemini/config/mcp_config.json`. Bind
   127.0.0.1 + a per-session `x-bridge-token`. AskAntigravity inner agy
@@ -393,11 +410,19 @@ Ask*/council recursion is denied. Members run **read-only isolated Ask**
 Only the chair may write, and only if `args.apply == true`.
 
 Default members: `claude-bridge/claude-opus-4-6`, `antigravity/gemini-3.6-flash`,
-`codex/gpt-5.3-codex`. Override with `args.members`, `args.chair`.
+`codex/gpt-5.1-codex`. Override with `args.members`, `args.chair`. Codex
+defaults to `gpt-5.1-codex` because ChatGPT Plus/Pro Codex subscriptions
+reject `gpt-5.3-codex`.
+
+When it works, `/council` returns a visible product: the independent
+answers, a ranking stage **when more than one seat answered**, and a chair
+synthesis. If only one seat starts (degraded membership), review is skipped
+but the report still includes that seat's answer plus the chair note — never
+a null report.
 
 ```text
 /council implement the cache invalidation
-/workflow council {"query":"...", "members":["codex/gpt-5.3-codex"], "apply": false}
+/workflow council {"query":"...", "members":["codex/gpt-5.1-codex"], "apply": false}
 grog -p --workflow council "..."
 ```
 

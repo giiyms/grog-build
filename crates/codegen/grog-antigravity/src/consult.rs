@@ -6,7 +6,9 @@ use std::process::Stdio;
 use tokio::io::{AsyncReadExt, BufReader};
 use tokio::process::Command;
 
-use crate::spawn::{ask_agy_argv, provider_turn_argv, AgyMode, AskAntigravitySpec, ProviderTurnSpec};
+use crate::spawn::{
+    AgyMode, AskAntigravitySpec, ProviderTurnSpec, ask_agy_argv, provider_turn_argv,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsultResult {

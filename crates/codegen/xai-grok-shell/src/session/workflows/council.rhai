@@ -9,11 +9,26 @@ let meta = #{
     ],
 };
 
+// Rhai's `trim()` mutates the string in place and returns `()` (unit) on
+// the engine version grog ships. `return s.trim()` therefore turned a
+// non-empty chair note into JSON null. Handle both that mutating form and
+// a hypothetical returning form.
 fn trimmed(s) {
-    if type_of(s) == "string" {
-        return s.trim();
+    if type_of(s) != "string" {
+        return "";
     }
-    ""
+    let out = s.trim();
+    if type_of(out) == "string" {
+        return out;
+    }
+    s
+}
+
+fn is_blank(s) {
+    if s == () {
+        return true;
+    }
+    trimmed(s) == ""
 }
 
 fn output_text(result) {
@@ -21,8 +36,11 @@ fn output_text(result) {
         return "";
     }
     let text = trimmed(result.output);
-    if text == "" {
+    if is_blank(text) {
         text = trimmed(json_encode(result.output));
+    }
+    if is_blank(text) {
+        return "";
     }
     text
 }
@@ -40,7 +58,7 @@ fn chair_opts(label, phase_name, apply_writes, chair) {
         label: label,
         phase: phase_name,
     };
-    if chair != () && trimmed(chair) != "" {
+    if chair != () && !is_blank(chair) {
         opts.model = chair;
     }
     if apply_writes != true {
@@ -60,7 +78,7 @@ if query == () || query == "" {
 let members = [
     "claude-bridge/claude-opus-4-6",
     "antigravity/gemini-3.6-flash",
-    "codex/gpt-5.3-codex",
+    "codex/gpt-5.1-codex",
 ];
 if args.members != () {
     let override_members = [];
@@ -123,6 +141,8 @@ for s in seats {
 }
 
 // Karpathy stage 2: each successful member ranks anonymized Response A/B/C.
+// Skip when only one seat answered (nothing to rank), but still return that
+// seat's answer plus the chair note — never an empty report.
 let reviews_raw = "";
 if seats.len() >= 2 {
     phase("Review");
@@ -188,15 +208,23 @@ let verdict_prompt = "You are the Chairman of an LLM council (Karpathy-style). M
 let apply_writes = args.apply == true;
 let chair = args.chair;
 let verdict = agent(verdict_prompt, chair_opts("council-chair-verdict", "Verdict", apply_writes, chair));
-let report = output_text(verdict);
-if report == "" {
-    report = "# Council dossier\n\n"
-        + alias_key
-        + failed_note
-        + "\n## Opinions\n"
-        + opinions_named
-        + "\n## Review\n"
-        + reviews_raw
-        + "\n(Chair synthesis failed; dossier above is the raw deliberation.)\n";
+let chair_text = output_text(verdict);
+
+// Always return a visible product: chair synthesis (when it survived trim)
+// plus the live seat answers. Degraded membership (one live seat, review
+// skipped) must still show that seat and the chair note — never null.
+let report = "# Council verdict\n\n";
+if !is_blank(chair_text) {
+    report += chair_text;
+    report += "\n";
+} else {
+    report += "(Chair synthesis failed; dossier below is the raw deliberation.)\n";
 }
+report += "\n";
+report += alias_key;
+report += failed_note;
+report += "\n## Opinions\n";
+report += opinions_named;
+report += "\n## Review\n";
+report += reviews_raw;
 complete(#{ report: report, status: "ok" });

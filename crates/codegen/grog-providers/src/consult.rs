@@ -169,7 +169,9 @@ mod tests {
 
     #[tokio::test]
     async fn empty_prompt_is_rejected() {
-        let err = provider_turn("codex/gpt-5.3-codex", "  ").await.unwrap_err();
+        let err = provider_turn(crate::grog_codex::DEFAULT_CODEX_QUALIFIED, "  ")
+            .await
+            .unwrap_err();
         assert!(matches!(err, ConsultError::EmptyPrompt));
     }
 }

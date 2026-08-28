@@ -11,6 +11,13 @@ pub const VERSION: &str = match option_env!("GROK_VERSION") {
     None => env!("CARGO_PKG_VERSION"),
 };
 
+/// Public CLI name for this fork (`grog --version`, TUI badges).
+/// Official x.ai `grok` is a different binary (typically `~/.grok/bin/grok`).
+pub const PRODUCT_CLI_NAME: &str = "grog";
+
+/// Short product label on welcome / version chrome.
+pub const PRODUCT_DISPLAY_NAME: &str = "Grog";
+
 /// The release pipeline always injects `GROK_VERSION`; without it the build is from source.
 pub const IS_DEV_BUILD: bool = option_env!("GROK_VERSION").is_none();
 
@@ -93,6 +100,9 @@ mod tests {
         // display_version uses compiled VERSION — just verify the label appends
         assert_eq!(display_version(""), VERSION);
         assert!(display_version(" [stable]").ends_with("[stable]"));
+        assert_eq!(PRODUCT_CLI_NAME, "grog");
+        assert_ne!(PRODUCT_CLI_NAME, "grok");
+        assert_eq!(PRODUCT_DISPLAY_NAME, "Grog");
     }
 
     #[test]

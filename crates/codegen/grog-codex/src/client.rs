@@ -1,6 +1,6 @@
 //! ChatGPT Codex backend consult (Responses-shaped). Not `api.openai.com`.
 
-use crate::auth::{chatgpt_account_id, CodexAuth, AUTH_ISSUER, CODEX_BACKEND, CODEX_CLIENT_ID};
+use crate::auth::{AUTH_ISSUER, CODEX_BACKEND, CODEX_CLIENT_ID, CodexAuth, chatgpt_account_id};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsultResult {
@@ -19,7 +19,11 @@ pub enum ClientError {
     Empty,
 }
 
-pub fn consult_sync(auth: &CodexAuth, model: &str, prompt: &str) -> Result<ConsultResult, ClientError> {
+pub fn consult_sync(
+    auth: &CodexAuth,
+    model: &str,
+    prompt: &str,
+) -> Result<ConsultResult, ClientError> {
     let tokens = auth.tokens.as_ref().ok_or(ClientError::NoToken)?;
     if tokens.access_token.is_empty() {
         return Err(ClientError::NoToken);
@@ -45,9 +49,13 @@ pub fn consult_sync(auth: &CodexAuth, model: &str, prompt: &str) -> Result<Consu
     if !account.is_empty() {
         builder = builder.header("ChatGPT-Account-Id", account);
     }
-    let resp = builder.send().map_err(|e| ClientError::Transport(e.to_string()))?;
+    let resp = builder
+        .send()
+        .map_err(|e| ClientError::Transport(e.to_string()))?;
     let status = resp.status().as_u16();
-    let json: serde_json::Value = resp.json().map_err(|e| ClientError::Transport(e.to_string()))?;
+    let json: serde_json::Value = resp
+        .json()
+        .map_err(|e| ClientError::Transport(e.to_string()))?;
     if !(200..300).contains(&status) {
         return Err(ClientError::Http {
             status,
@@ -77,7 +85,9 @@ pub fn refresh_sync(auth: &CodexAuth) -> Result<CodexAuth, ClientError> {
         .send()
         .map_err(|e| ClientError::Transport(e.to_string()))?;
     let status = resp.status().as_u16();
-    let json: serde_json::Value = resp.json().map_err(|e| ClientError::Transport(e.to_string()))?;
+    let json: serde_json::Value = resp
+        .json()
+        .map_err(|e| ClientError::Transport(e.to_string()))?;
     if !(200..300).contains(&status) {
         return Err(ClientError::Http {
             status,

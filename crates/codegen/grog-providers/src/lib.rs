@@ -133,8 +133,9 @@ mod tests {
         assert_eq!(r.model, "claude-opus-4-6");
         let r = ModelRef::parse("agy/gemini-3.6-flash");
         assert_eq!(r.provider, ProviderId::Antigravity);
-        let r = ModelRef::parse("codex/gpt-5.3-codex");
+        let r = ModelRef::parse("codex/gpt-5.1-codex");
         assert_eq!(r.provider, ProviderId::Codex);
+        assert_eq!(r.qualified(), grog_codex::DEFAULT_CODEX_QUALIFIED);
     }
 
     #[test]
@@ -160,6 +161,11 @@ mod tests {
             .collect();
         assert!(keys.iter().any(|k| k == "claude-bridge/claude-opus-4-6"));
         assert!(keys.iter().any(|k| k == "antigravity/gemini-3.6-flash"));
-        assert!(keys.iter().any(|k| k == "codex/gpt-5.3-codex"));
+        assert!(
+            keys.iter()
+                .any(|k| k == grog_codex::DEFAULT_CODEX_QUALIFIED)
+        );
+        assert_eq!(keys[0], grog_codex::DEFAULT_CODEX_QUALIFIED);
+        assert_ne!(grog_codex::DEFAULT_CODEX_MODEL, "gpt-5.3-codex");
     }
 }
