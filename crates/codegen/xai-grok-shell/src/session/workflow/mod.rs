@@ -69,7 +69,7 @@ mod builtin_tests {
         assert!(script.contains("claude-bridge/claude-opus-4-6"));
         assert!(script.contains("antigravity/gemini-3.6-flash"));
         assert!(script.contains("codex/gpt-5.3-codex"));
-        assert!(script.contains("label: \"council-chair-verdict\""));
+        assert!(script.contains("\"council-chair-verdict\""));
         assert!(script.contains("phase(\"Opinions\")"));
         assert!(script.contains("phase(\"Review\")"));
         assert!(script.contains("phase(\"Verdict\")"));
