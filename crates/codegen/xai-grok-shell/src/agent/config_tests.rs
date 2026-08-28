@@ -7641,7 +7641,14 @@ fn grog_telemetry_grog_env_alias_opts_in() {
 }
 
 #[test]
+#[serial]
 fn grog_privacy_defaults_are_off() {
+    unsafe { std::env::remove_var("GROK_TELEMETRY_ENABLED") };
+    unsafe { std::env::remove_var("GROG_TELEMETRY_ENABLED") };
+    unsafe { std::env::remove_var("GROK_TELEMETRY_TRACE_UPLOAD") };
+    unsafe { std::env::remove_var("GROG_TELEMETRY_TRACE_UPLOAD") };
+    unsafe { std::env::remove_var("GROK_FEEDBACK_ENABLED") };
+    unsafe { std::env::remove_var("GROG_FEEDBACK_ENABLED") };
     let cfg = Config::default();
     assert!(cfg.resolve_telemetry_mode().value.is_disabled());
     assert!(!cfg.resolve_trace_upload().value);
