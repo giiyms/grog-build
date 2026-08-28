@@ -23,6 +23,10 @@ pub enum Command {
     Logout,
     /// Sign in to Grok
     Login {
+        /// Native grog provider to sign in (`codex`, `claude`, or `agy`).
+        /// Omit to sign in to xAI.
+        #[arg(value_name = "PROVIDER")]
+        provider: Option<String>,
         /// Ignored (kept for backwards compatibility). OAuth2 is now the only auth method.
         #[arg(long, hide = true)]
         legacy: bool,
@@ -409,9 +413,9 @@ pub struct LeaderArgs {
 }
 #[derive(Debug, Clone, Parser)]
 #[command(
-    name = "grok",
+    name = "grog",
     version = xai_grok_version::full_version(),
-    about = "Grok Build TUI",
+    about = "Grog — multi-provider coding agent (Grok Build fork)",
     disable_version_flag = true,
     next_display_order = None,
     help_template = "\
@@ -862,8 +866,8 @@ impl PagerArgs {
             .map(std::path::Path::new)
             .and_then(|p| p.file_name())
             .and_then(|n| n.to_str())
-            .filter(|n| *n == "grok" || *n == "agent")
-            .unwrap_or("grok")
+            .filter(|n| *n == "grog" || *n == "grok" || *n == "agent")
+            .unwrap_or("grog")
             .to_owned();
         Self::parse_from(std::iter::once(bin_name).chain(std::env::args().skip(1)))
     }

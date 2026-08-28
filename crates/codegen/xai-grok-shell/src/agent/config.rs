@@ -880,7 +880,7 @@ pub(crate) fn resolve_enabled(
         .default(default)
         .resolve()
 }
-pub(crate) use xai_grok_telemetry::config::env_telemetry_mode;
+pub(crate) use xai_grok_telemetry::config::env_telemetry_mode_grog_or_grok;
 pub use xai_grok_telemetry::config::{TelemetryConfig, TelemetryMode};
 /// Plugin system configuration from `[plugins]` section in config.toml.
 ///
@@ -2421,7 +2421,7 @@ impl Config {
     }
     fn apply_env_overrides(&mut self) {
         self.telemetry.apply_env_overrides();
-        if let Some(mode) = env_telemetry_mode("GROK_TELEMETRY_ENABLED") {
+        if let Some(mode) = env_telemetry_mode_grog_or_grok() {
             self.features.telemetry = Some(mode);
         }
         self.grok_com_config.force_login_team_uuid = crate::auth::resolve_force_login_team(
@@ -2455,38 +2455,20 @@ impl Config {
         if let Some(mode) = self.requirements.telemetry.pinned() {
             return Resolved::new(mode, ConfigSource::Requirement);
         }
-        if let Some(mode) = env_telemetry_mode("GROK_TELEMETRY_ENABLED") {
+        if let Some(mode) = env_telemetry_mode_grog_or_grok() {
             return Resolved::new(mode, ConfigSource::Env);
         }
         if let Some(mode) = self.features.telemetry {
             return Resolved::new(mode, ConfigSource::Config);
         }
-        if let Some(rs) = self.remote_settings.as_ref() {
-            if let Some(mode_str) = rs.telemetry_mode.as_deref()
-                && let Some(mode) = TelemetryMode::parse(mode_str)
-            {
-                return Resolved::new(mode, ConfigSource::Remote);
-            }
-            if let Some(val) = rs.telemetry_enabled {
-                return Resolved::new(TelemetryMode::from(val), ConfigSource::Remote);
-            }
-        }
+        // Grog: xAI remote settings cannot enable telemetry.
         Resolved::new(TelemetryMode::Disabled, ConfigSource::Default)
     }
     pub(crate) fn resolve_trace_upload(&self) -> Resolved<bool> {
-        let mode = self.resolve_telemetry_mode();
-        let ff = if mode.value.is_disabled() {
-            None
-        } else {
-            self.remote_settings
-                .as_ref()
-                .and_then(|s| s.trace_upload_enabled)
-        };
         BoolFlag::env("GROK_TELEMETRY_TRACE_UPLOAD")
             .requirement(self.requirements.trace_upload.pinned())
             .config(self.telemetry.trace_upload)
-            .feature_flag(ff)
-            .default(mode.value.is_enabled())
+            .default(false)
             .resolve()
     }
     /// Resolve jemalloc heap-profile config from stored remote settings + gates.
@@ -2604,18 +2586,11 @@ impl Config {
         )
     }
     /// Gate first-run auto-registration of the official xAI marketplace source.
-    /// Precedence: env `GROK_OFFICIAL_MARKETPLACE_AUTO_REGISTER` > remote settings >
-    /// default off (so only remote settings-targeted teams get it pre-public). No
-    /// managed `.requirement` pin: `marketplace_allowlist` already gates sources.
+    /// Grog never auto-adds `github.com/xai-org/plugin-marketplace`. Users add
+    /// marketplace sources themselves. Env and remote settings cannot re-arm it.
+    #[allow(clippy::unused_self)]
     pub(crate) fn resolve_official_marketplace_auto_register(&self) -> Resolved<bool> {
-        let ff = self
-            .remote_settings
-            .as_ref()
-            .and_then(|s| s.official_marketplace_auto_register);
-        BoolFlag::env("GROK_OFFICIAL_MARKETPLACE_AUTO_REGISTER")
-            .feature_flag(ff)
-            .default(false)
-            .resolve()
+        Resolved::new(false, ConfigSource::Default)
     }
     /// Every tier this config can speak for. A caller with a different remote
     /// snapshot overrides `remote` and leaves the rest.
@@ -3251,30 +3226,26 @@ impl SyncBoolFlag {
     }
 }
 /// Sync slice of [`Config::resolve_telemetry_mode`] for use before the tokio
-/// runtime (e.g. `init_sentry`). `true` only when explicitly off.
+/// runtime (e.g. `init_sentry`). Default is disabled.
 pub(crate) fn is_telemetry_disabled_sync() -> bool {
     !SyncBoolFlag::new(telemetry_enabled_from_toml)
         .disable_env("DISABLE_TELEMETRY")
         .enable_env(grok_telemetry_env_enabled)
         .resolve()
 }
-/// Like [`is_telemetry_disabled_sync`] but only `true` when telemetry is
-/// *explicitly* off; absence is not disabled (`.default(true)`) so remote-only
-/// enablement still builds the OTLP exporter (the runtime gate then governs it).
+/// Grog treats unset telemetry as disabled, so the OTLP exporter is not built
+/// unless the user opts in. Remote settings cannot enable it later.
 pub(crate) fn is_telemetry_explicitly_disabled_sync() -> bool {
-    !SyncBoolFlag::new(telemetry_enabled_from_toml)
-        .disable_env("DISABLE_TELEMETRY")
-        .enable_env(grok_telemetry_env_enabled)
-        .default(true)
-        .resolve()
+    is_telemetry_disabled_sync()
 }
-/// Sync sibling of [`is_telemetry_disabled_sync`] scoped to Sentry. Inherits
-/// from telemetry when no Sentry-specific signal is set.
+/// Sync sibling of [`is_telemetry_disabled_sync`] scoped to Sentry. Grog does
+/// not inherit a telemetry opt-in into Sentry; error reporting is its own
+/// opt-in (`GROG_ERROR_REPORTING` / `GROK_ERROR_REPORTING` / `[diagnostics]
+/// error_reporting`).
 pub fn is_error_reporting_disabled_sync() -> bool {
     !SyncBoolFlag::new(error_reporting_enabled_from_toml)
         .disable_env("DISABLE_ERROR_REPORTING")
-        .enable_env(|| env_bool("GROK_ERROR_REPORTING"))
-        .inherit(|| !is_telemetry_disabled_sync())
+        .enable_env(|| xai_grok_config::env_bool_grog_or_grok("GROK_ERROR_REPORTING"))
         .resolve()
 }
 /// `[features] telemetry` as enabled bool. SessionMetrics counts as enabled
@@ -3294,10 +3265,11 @@ fn error_reporting_enabled_from_toml(root: &toml::Value) -> Option<bool> {
         .get("error_reporting")?
         .as_bool()
 }
-/// `GROK_TELEMETRY_ENABLED` resolved through `TelemetryMode::parse` so the
-/// extended string forms (e.g. `"session_metrics"`) are accepted.
+/// `GROG_TELEMETRY_ENABLED` then `GROK_TELEMETRY_ENABLED`, parsed through
+/// `TelemetryMode::parse` so the extended string forms (e.g. `"session_metrics"`)
+/// are accepted.
 fn grok_telemetry_env_enabled() -> Option<bool> {
-    env_telemetry_mode("GROK_TELEMETRY_ENABLED").map(|m| !m.is_disabled())
+    env_telemetry_mode_grog_or_grok().map(|m| !m.is_disabled())
 }
 /// Load `~/.grok/requirements.toml` standalone so the admin pin can beat
 /// env vars. The merged config layer can't express that — last-merge-wins
@@ -3321,7 +3293,7 @@ pub(crate) fn read_requirements_toml() -> Option<toml::Value> {
 pub(crate) fn external_otel_master_switch_resolved() -> bool {
     external_otel_master_switch_from(
         xai_grok_config::load_merged_requirements().as_ref(),
-        env_bool("GROK_EXTERNAL_OTEL"),
+        xai_grok_config::env_bool_grog_or_grok("GROK_EXTERNAL_OTEL"),
         crate::config::load_effective_config().ok().as_ref(),
     )
 }
@@ -3664,7 +3636,33 @@ pub(crate) fn resolve_model_list(
     for entry in resolved.values_mut() {
         entry.info.derive_reasoning_effort_fields();
     }
+    merge_grog_native_catalog(&mut resolved, &cfg.endpoints);
     resolved
+}
+
+/// Insert grog native catalogs (`claude-bridge/…`, `antigravity/…`, `codex/…`)
+/// without overwriting existing config or remote keys. Do not point these at
+/// an HTTP inference URL — the sampler intercept handles them.
+fn merge_grog_native_catalog(
+    resolved: &mut IndexMap<String, ModelEntry>,
+    endpoints: &EndpointsConfig,
+) {
+    for entry in grog_providers::builtin_catalog() {
+        let key = format!("{}/{}", entry.provider.as_str(), entry.id);
+        if resolved.contains_key(&key) {
+            continue;
+        }
+        let mut model = ModelEntry::fallback(&key, endpoints);
+        model.info.id = Some(key.clone());
+        model.info.model = entry.id.to_string();
+        model.info.name = Some(entry.display_name.to_string());
+        model.info.model_family = Some(entry.provider.as_str().to_string());
+        model.info.base_url = format!("grog://{}", entry.provider.as_str());
+        model.info.user_selectable = true;
+        model.info.supported_in_api = true;
+        model.info.hidden = false;
+        resolved.insert(key, model);
+    }
 }
 /// Layer 6 of [`resolve_model_list`]: fold the global `[models].extra_headers`
 /// into every model as a base. The presence check is case-insensitive because

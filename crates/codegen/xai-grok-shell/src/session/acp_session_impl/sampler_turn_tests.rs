@@ -1,7 +1,8 @@
 use xai_grok_sampling_types::{SearchDateBound, ToolOverrides, WebSearchOptions, XSearchOptions};
 
 use super::{
-    CLASSIFIER_REQUEST_TOKEN_RESERVE, classifier_request_fits_context, resolve_configured_cutoff,
+    CLASSIFIER_REQUEST_TOKEN_RESERVE, classifier_request_fits_context,
+    grog_native_uses_isolated_ask, resolve_configured_cutoff, tool_can_mutate_workspace,
 };
 
 fn x_cut(to: &str) -> XSearchOptions {
@@ -97,5 +98,26 @@ fn inherited_cutoff_agrees_with_the_wire_echo_so_the_two_implementations_cannot_
         let wire_echo = apply_tool_overrides(&mut tools, base.as_ref());
         let inherited = resolve_configured_cutoff(seed.clone(), base.as_ref());
         assert_eq!(wire_echo, inherited, "seed={seed:?} base={base:?}");
+    }
+}
+
+#[test]
+fn read_only_native_turns_use_isolated_ask() {
+    assert!(grog_native_uses_isolated_ask(&[]));
+    assert!(grog_native_uses_isolated_ask(&[spec("read_file"), spec("grep")]));
+    assert!(!grog_native_uses_isolated_ask(&[
+        spec("read_file"),
+        spec("search_replace"),
+    ]));
+    assert!(!grog_native_uses_isolated_ask(&[spec("run_terminal_command")]));
+    assert!(tool_can_mutate_workspace("GrokBuild:search_replace"));
+    assert!(!tool_can_mutate_workspace("read_file"));
+}
+
+fn spec(name: &str) -> xai_grok_sampling_types::ToolSpec {
+    xai_grok_sampling_types::ToolSpec {
+        name: name.into(),
+        description: None,
+        parameters: serde_json::json!({}),
     }
 }

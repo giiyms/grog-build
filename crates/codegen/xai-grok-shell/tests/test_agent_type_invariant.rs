@@ -36,6 +36,13 @@ fn invalidate_models_cache(home: &std::path::Path) {
         std::fs::remove_file(&cache).expect("failed to delete models_cache.json");
     }
 }
+
+fn prompt_has_build_identity(sys_prompt: &str) -> bool {
+    sys_prompt.contains("Grog")
+        || sys_prompt.contains("grog")
+        || sys_prompt.contains("Grok")
+        || sys_prompt.contains("grok")
+}
 /// Start a mock server with two models:
 /// - `default-model`: no agent_type (→ defaults to "grok-build")
 async fn dual_model_server() -> MockInferenceServer {
@@ -79,7 +86,7 @@ async fn test_default_model_uses_grok_build_harness() {
             .last_system_prompt()
             .expect("should have at least one inference request");
         assert!(
-            sys_prompt.contains("Grok") || sys_prompt.contains("grok"),
+            prompt_has_build_identity(&sys_prompt),
             "default model should use grok-build harness\nsystem prompt preview: {}",
             &sys_prompt[..sys_prompt.len().min(500)]
         );
@@ -156,16 +163,14 @@ async fn test_session_resume_preserves_harness() {
         let resumed_sys_prompt = server
             .last_system_prompt()
             .expect("should have captured resumed system prompt");
-        let original_has_grok =
-            original_sys_prompt.contains("Grok") || original_sys_prompt.contains("grok");
-        let resumed_has_grok =
-            resumed_sys_prompt.contains("Grok") || resumed_sys_prompt.contains("grok");
+        let original_has_identity = prompt_has_build_identity(&original_sys_prompt);
+        let resumed_has_identity = prompt_has_build_identity(&resumed_sys_prompt);
         assert_eq!(
-            original_has_grok,
-            resumed_has_grok,
+            original_has_identity,
+            resumed_has_identity,
             "resumed session should use the same harness as the original\n\
-             original identity markers: grok={original_has_grok}\n\
-             resumed identity markers: grok={resumed_has_grok}\n\
+             original identity markers: grok={original_has_identity}\n\
+             resumed identity markers: grok={resumed_has_identity}\n\
              original prompt (first 300): {}\n\
              resumed prompt (first 300): {}",
             &original_sys_prompt[..original_sys_prompt.len().min(300)],
@@ -202,7 +207,7 @@ async fn test_model_without_agent_type_defaults_to_grok_build() {
                 .last_system_prompt()
                 .expect("should have at least one inference request");
             assert!(
-            sys_prompt.contains("Grok") || sys_prompt.contains("grok"),
+            prompt_has_build_identity(&sys_prompt),
             "model without agent_type should default to grok-build harness\nsystem prompt preview: {}",
             &sys_prompt[..sys_prompt.len().min(500)]
         );
@@ -242,7 +247,7 @@ async fn test_grok_agent_env_overrides_model_agent_type() {
                 .last_system_prompt()
                 .expect("should have inference request");
             assert!(
-            sys_prompt.contains("Grok") || sys_prompt.contains("grok"),
+            prompt_has_build_identity(&sys_prompt),
             "GROK_AGENT=grok-build should override catalog model agent_type\nsystem prompt preview: {}",
             &sys_prompt[..sys_prompt.len().min(500)]
         );

@@ -55,4 +55,28 @@ mod builtin_tests {
         assert!(script.contains("report: chat_report"));
         assert!(!script.contains("chat_report += \"\\n## Sources\\n\""));
     }
+
+    #[test]
+    fn council_fans_out_read_only_members_and_synthesizes() {
+        let script = super::registry::BUILTIN_WORKFLOWS
+            .iter()
+            .find(|builtin| builtin.name == "council")
+            .map(|builtin| builtin.script)
+            .expect("council builtin registered");
+        assert!(script.contains("capability_mode: \"read-only\""));
+        assert!(script.contains("parallel(opinion_jobs)"));
+        assert!(script.contains("parallel(review_jobs)"));
+        assert!(script.contains("claude-bridge/claude-opus-4-6"));
+        assert!(script.contains("antigravity/gemini-3.6-flash"));
+        assert!(script.contains("codex/gpt-5.3-codex"));
+        assert!(script.contains("\"council-chair-verdict\""));
+        assert!(script.contains("phase(\"Opinions\")"));
+        assert!(script.contains("phase(\"Review\")"));
+        assert!(script.contains("phase(\"Verdict\")"));
+        assert!(script.contains("FINAL RANKING:"));
+        assert!(script.contains("Response A"));
+        assert!(!script.contains("phase(\"Brief\")"));
+        assert!(!script.contains("phase(\"Deliberate\")"));
+        assert!(script.contains("complete(#{ report: report, status: \"ok\" })"));
+    }
 }

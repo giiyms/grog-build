@@ -36,6 +36,11 @@ for the version of the code present in this tree.
 
 </div>
 
+> **This checkout is grog** — a personal multi-provider fork of Grok Build.
+> Launch with `grog`. Providers: Claude Code CLI, ChatGPT Codex OAuth, Google
+> `agy`, optional xAI. Council: `/council`. Docs: [docs/grog.md](docs/grog.md),
+> [docs/UPSTREAM.md](docs/UPSTREAM.md) (how to rebase onto the next monorepo dump).
+
 ---
 
 ## Installing the released binary

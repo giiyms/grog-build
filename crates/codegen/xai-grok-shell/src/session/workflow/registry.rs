@@ -13,14 +13,24 @@ pub(crate) struct BuiltinWorkflow {
     pub path: &'static str,
 }
 
-pub(crate) const BUILTIN_WORKFLOWS: &[BuiltinWorkflow] = &[BuiltinWorkflow {
-    name: "deep-research",
-    script: include_str!("../workflows/deep_research.rhai"),
-    path: concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/session/workflows/deep_research.rhai"
-    ),
-}];
+pub(crate) const BUILTIN_WORKFLOWS: &[BuiltinWorkflow] = &[
+    BuiltinWorkflow {
+        name: "deep-research",
+        script: include_str!("../workflows/deep_research.rhai"),
+        path: concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/session/workflows/deep_research.rhai"
+        ),
+    },
+    BuiltinWorkflow {
+        name: "council",
+        script: include_str!("../workflows/council.rhai"),
+        path: concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/session/workflows/council.rhai"
+        ),
+    },
+];
 
 pub(crate) struct ResolvedWorkflow {
     pub meta: WorkflowMeta,

@@ -36,10 +36,10 @@ pub fn init(config: Config) -> ClientInitGuard {
         return sentry::init(ClientOptions::default());
     }
 
-    let dsn = std::env::var("SENTRY_DSN")
-        .ok()
-        .or_else(|| option_env!("SENTRY_DSN").map(|s| s.to_string()))
-        .unwrap_or_default();
+    // Runtime-only. Grog never uses a compile-time `SENTRY_DSN` baked by an
+    // xAI build; without an explicit env DSN, init is a no-op even if
+    // `disabled` is false.
+    let dsn = std::env::var("SENTRY_DSN").unwrap_or_default();
 
     let scrubber = Scrubber::from_env();
 

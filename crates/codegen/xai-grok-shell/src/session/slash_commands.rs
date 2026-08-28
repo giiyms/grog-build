@@ -265,6 +265,17 @@ pub(super) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
         },
     },
     BuiltinCommand {
+        name: "council",
+        description: "Convene Claude, Codex, and Antigravity: independent opinions, anonymous peer ranking, chair synthesis",
+        argument_hint: Some("<query>"),
+        aliases: &[],
+        gate: BuiltinGate::WorkflowLaunches,
+        workflow_projection: WorkflowProjection::ExactName,
+        resolve: |args| BuiltinAction::Council {
+            query: args.trim().to_string(),
+        },
+    },
+    BuiltinCommand {
         name: "workflow",
         description: "Launch a saved workflow, list runs, or manage a run (pause, resume, stop, save)",
         argument_hint: Some(
@@ -1291,6 +1302,9 @@ pub(super) enum BuiltinAction {
     DeepResearch {
         query: String,
     },
+    Council {
+        query: String,
+    },
     WorkflowManage {
         run_id: String,
         op: String,
@@ -1331,6 +1345,7 @@ impl BuiltinAction {
             | BuiltinAction::GoalResume
             | BuiltinAction::GoalClear => "goal",
             BuiltinAction::DeepResearch { .. } => "deep-research",
+            BuiltinAction::Council { .. } => "council",
             BuiltinAction::WorkflowManage { .. } => "workflow",
             BuiltinAction::WorkflowLaunch { .. } => "workflow",
         }
@@ -1365,6 +1380,7 @@ impl BuiltinAction {
             | BuiltinAction::GoalResume
             | BuiltinAction::GoalClear => false,
             BuiltinAction::DeepResearch { .. } => true,
+            BuiltinAction::Council { .. } => true,
             BuiltinAction::WorkflowManage { .. } => true,
             BuiltinAction::WorkflowLaunch { input, .. } => !input.is_empty(),
         }

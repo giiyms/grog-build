@@ -1,10 +1,11 @@
 pub const ENV_SYSTEM_PROMPT_LABEL: &str = "GROK_SYSTEM_PROMPT_LABEL";
+pub const ENV_SYSTEM_PROMPT_LABEL_GROG: &str = "GROG_SYSTEM_PROMPT_LABEL";
 
 pub const DEFAULT_SYSTEM_PROMPT_LABEL: &str = xai_grok_agent::DEFAULT_SYSTEM_PROMPT_LABEL;
 
 /// Resolve system-prompt identity label.
 /// Precedence: env → config per-model → `[agent]` → GB per-model → GB global →
-/// `"Grok"`. Empty/whitespace falls through.
+/// `"Grog"`. Empty/whitespace falls through.
 ///
 /// Per-model TOML is looked up by session catalog id, then routing slug
 /// (`ModelInfo.model`). Do not use CLI `-m` alone — it may outlive a mid-session
@@ -44,9 +45,14 @@ pub(crate) fn resolve_system_prompt_label_from_tiers(
             (!t.is_empty()).then(|| t.to_string())
         })
     };
-    std::env::var(ENV_SYSTEM_PROMPT_LABEL)
+    std::env::var(ENV_SYSTEM_PROMPT_LABEL_GROG)
         .ok()
         .and_then(|s| non_empty(Some(s)))
+        .or_else(|| {
+            std::env::var(ENV_SYSTEM_PROMPT_LABEL)
+                .ok()
+                .and_then(|s| non_empty(Some(s)))
+        })
         .or_else(|| non_empty(user_per_model))
         .or_else(|| non_empty(user_global))
         .or_else(|| non_empty(gb_per_model))
@@ -57,20 +63,25 @@ pub(crate) fn resolve_system_prompt_label_from_tiers(
 #[cfg(test)]
 mod system_prompt_label_tests {
     use super::{
-        DEFAULT_SYSTEM_PROMPT_LABEL, ENV_SYSTEM_PROMPT_LABEL,
+        DEFAULT_SYSTEM_PROMPT_LABEL, ENV_SYSTEM_PROMPT_LABEL, ENV_SYSTEM_PROMPT_LABEL_GROG,
         resolve_system_prompt_label_from_tiers,
     };
 
-    /// Serialize access to `GROK_SYSTEM_PROMPT_LABEL` and clear it for tier tests.
-    /// `env_wins_over_all_tiers` mutates the env; without this lock, parallel tests
-    /// that expect the var unset (e.g. `gb_per_model_beats_gb_global`) flake.
+    /// Serialize access to `GROG_SYSTEM_PROMPT_LABEL` / `GROK_SYSTEM_PROMPT_LABEL`
+    /// and clear both for tier tests.
     fn with_env_cleared<R>(f: impl FnOnce() -> R) -> R {
         let _guard = ENV_LOCK.lock().unwrap();
-        let prev = std::env::var(ENV_SYSTEM_PROMPT_LABEL).ok();
+        let prev_grog = std::env::var(ENV_SYSTEM_PROMPT_LABEL_GROG).ok();
+        let prev_grok = std::env::var(ENV_SYSTEM_PROMPT_LABEL).ok();
         // Safety: test-only, locked.
+        unsafe { std::env::remove_var(ENV_SYSTEM_PROMPT_LABEL_GROG) };
         unsafe { std::env::remove_var(ENV_SYSTEM_PROMPT_LABEL) };
         let r = f();
-        match prev {
+        match prev_grog {
+            Some(v) => unsafe { std::env::set_var(ENV_SYSTEM_PROMPT_LABEL_GROG, v) },
+            None => unsafe { std::env::remove_var(ENV_SYSTEM_PROMPT_LABEL_GROG) },
+        }
+        match prev_grok {
             Some(v) => unsafe { std::env::set_var(ENV_SYSTEM_PROMPT_LABEL, v) },
             None => unsafe { std::env::remove_var(ENV_SYSTEM_PROMPT_LABEL) },
         }
@@ -149,17 +160,27 @@ mod system_prompt_label_tests {
 
     #[test]
     fn env_wins_over_all_tiers() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        // Safety: test-only, locked.
-        unsafe { std::env::set_var(ENV_SYSTEM_PROMPT_LABEL, "FromEnv") };
-        let got = resolve_system_prompt_label_from_tiers(
-            Some("PerModel".into()),
-            Some("Global".into()),
-            Some("GbPer".into()),
-            Some("GbGlobal".into()),
-        );
-        unsafe { std::env::remove_var(ENV_SYSTEM_PROMPT_LABEL) };
-        assert_eq!(got, "FromEnv");
+        with_env_cleared(|| {
+            // Safety: test-only, locked.
+            unsafe { std::env::set_var(ENV_SYSTEM_PROMPT_LABEL, "FromEnv") };
+            let got = resolve_system_prompt_label_from_tiers(
+                Some("PerModel".into()),
+                Some("Global".into()),
+                Some("GbPer".into()),
+                Some("GbGlobal".into()),
+            );
+            assert_eq!(got, "FromEnv");
+        });
+    }
+
+    #[test]
+    fn grog_env_wins_over_grok_env() {
+        with_env_cleared(|| {
+            unsafe { std::env::set_var(ENV_SYSTEM_PROMPT_LABEL, "FromGrok") };
+            unsafe { std::env::set_var(ENV_SYSTEM_PROMPT_LABEL_GROG, "FromGrog") };
+            let got = resolve_system_prompt_label_from_tiers(None, None, None, None);
+            assert_eq!(got, "FromGrog");
+        });
     }
 
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());

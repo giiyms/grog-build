@@ -575,6 +575,7 @@ fn available_commands_orders_builtins_first() {
             "session-info",
             "feedback",
             "deep-research",
+            "council",
             "workflow",
             "goal",
             "loop",
@@ -1740,6 +1741,50 @@ fn same_named_builtin_projects_workflow_metadata_without_replacing_command() {
 }
 
 #[test]
+fn council_projects_workflow_metadata_and_resolves() {
+    let workflow = crate::session::workflow::registry::WorkflowListing {
+        name: "council".to_string(),
+        description: "Workflow metadata description".to_string(),
+        when_to_use: None,
+        source: "builtin",
+        path: None,
+    };
+    let commands = available_commands(&[], all_gated(), std::slice::from_ref(&workflow));
+    let matching: Vec<_> = commands
+        .iter()
+        .filter(|command| command.name == "council")
+        .collect();
+    assert_eq!(matching.len(), 1);
+    let command = matching[0];
+    assert!(command.description.contains("anonymous peer ranking"));
+    assert_eq!(
+        command.input,
+        Some(acp::AvailableCommandInput::Unstructured(
+            acp::UnstructuredCommandInput::new("<query>".to_string())
+        ))
+    );
+    let meta = command.meta.as_ref().expect("workflow metadata");
+    assert_eq!(
+        meta.get("workflowSource")
+            .and_then(serde_json::Value::as_str),
+        Some("builtin")
+    );
+
+    assert!(matches!(
+        resolve(
+            vec![text_block("/council should we cache this")],
+            &[],
+            all_gated(),
+            SkillSlashRewrite::default(),
+            std::slice::from_ref(&workflow),
+        )
+        .unwrap_err(),
+        SlashCommandOutcome::Builtin(BuiltinAction::Council { query })
+            if query == "should we cache this"
+    ));
+}
+
+#[test]
 fn ordinary_builtin_collisions_do_not_project_workflow_metadata() {
     let mut status_workflow = listing("status");
     status_workflow.source = "project";
@@ -1911,6 +1956,7 @@ fn existing_runs_keep_management_but_hide_launch_catalog() {
     assert!(names.iter().any(|name| name == "workflow"));
     assert!(!names.iter().any(|name| name == "review"));
     assert!(!names.iter().any(|name| name == "deep-research"));
+    assert!(!names.iter().any(|name| name == "council"));
     assert!(matches!(
         resolve(
             vec![text_block("/workflow stop old-run")],

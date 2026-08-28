@@ -1185,6 +1185,12 @@ impl SessionActor {
             *self.turn_stream_drained.lock() = Some(tx);
             (DrainBarrier(&self.turn_stream_drained), rx)
         };
+        if let Some(model) = request.model.as_deref()
+            && grog_providers::consult::is_native_model(model)
+        {
+            crate::tools::grog_ask::set_session_model(request.model.clone());
+            return grog_native_turn(request).await;
+        }
         let request_id = xai_grok_sampler::RequestId::random();
         let request_id_str = request_id.as_str().to_string();
         match self
@@ -1565,6 +1571,100 @@ fn resolve_configured_cutoff(
         web_search: prefer_non_empty(over_w, seed_w, WebSearchOptions::is_empty),
     }
 }
+
+fn flatten_conversation_prompt(request: &ConversationRequest) -> String {
+    request
+        .items
+        .iter()
+        .map(|item| item.text_content())
+        .filter(|text| !text.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+fn grog_sampling_error(message: String) -> xai_grok_sampler::SamplingErrorInfo {
+    xai_grok_sampler::SamplingErrorInfo {
+        kind: xai_grok_sampler::SamplingErrorKind::Api,
+        status_code: None,
+        message,
+        is_retryable: false,
+        retry_after_secs: None,
+        should_retry: None,
+        error_code: None,
+        model_metadata: None,
+        empty_response_context: None,
+        doom_loop_triggers: None,
+        doom_loop_aborted_at_chunk: None,
+        credential: xai_grok_sampling_types::SentCredential::Unknown,
+    }
+}
+
+/// Isolated Ask* (no vendor write loop) when the session cannot mutate the
+/// workspace. Council members and other `capability_mode: "read-only"` children
+/// must not spawn Claude/agy with AcceptEdits. `/model` on a native provider
+/// still uses a full provider turn because those sessions keep write tools.
+fn grog_native_uses_isolated_ask(tools: &[xai_grok_sampling_types::ToolSpec]) -> bool {
+    !tools.iter().any(|tool| tool_can_mutate_workspace(&tool.name))
+}
+
+fn tool_can_mutate_workspace(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    matches!(
+        n.as_str(),
+        "search_replace"
+            | "write_file"
+            | "str_replace"
+            | "apply_patch"
+            | "delete_file"
+            | "move_file"
+            | "run_terminal_command"
+            | "run_terminal_cmd"
+            | "bash"
+            | "execute"
+            | "shell"
+    ) || n.contains("search_replace")
+        || n.contains("write_file")
+        || n.contains("terminal_cmd")
+        || n.contains("terminal_command")
+}
+
+async fn grog_native_turn(
+    request: ConversationRequest,
+) -> Result<SamplerTurnOutcome, xai_grok_sampler::SamplingErrorInfo> {
+    let model = request
+        .model
+        .clone()
+        .unwrap_or_else(|| "unknown".to_string());
+    let prompt = flatten_conversation_prompt(&request);
+    let isolated = grog_native_uses_isolated_ask(&request.tools);
+    let result = if isolated {
+        grog_providers::consult::ask(&model, &prompt).await
+    } else {
+        grog_providers::consult::provider_turn(&model, &prompt).await
+    };
+    match result {
+        Ok(outcome) => {
+            let response = ConversationResponse {
+                items: vec![ConversationItem::assistant(outcome.text)],
+                stop_reason: Some(xai_grok_sampling_types::StopReason::Stop),
+                usage: None,
+                cost_usd_ticks: None,
+                message_chunks_emitted: 0,
+                doom_loop_signals: Vec::new(),
+                stop_message: None,
+                message_id: outcome.session_id,
+                raw_stop_reason: Some("stop".into()),
+                stop_sequence: None,
+            };
+            Ok(SamplerTurnOutcome::Response(
+                Box::new(response),
+                Box::new(xai_grok_sampler::InferenceLatencyStats::default()),
+            ))
+        }
+        Err(err) => Err(grog_sampling_error(err.to_string())),
+    }
+}
+
 #[cfg(test)]
 #[path = "sampler_turn_tests.rs"]
 mod tests;

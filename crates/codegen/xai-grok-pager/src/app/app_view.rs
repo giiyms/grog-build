@@ -720,8 +720,8 @@ pub struct AppView {
     /// Whether the `/share` slash command is available. Currently forced off
     /// while session share links are temporarily disabled in clients.
     pub sharing_enabled: bool,
-    /// Whether the plugin marketplace CTA is enabled. Env `GROK_PLUGIN_CTA`
-    /// overrides `RemoteSettings.plugin_cta` (remote settings); defaults to `false`.
+    /// Whether the plugin marketplace CTA is enabled. Env `GROG_PLUGIN_CTA` /
+    /// `GROK_PLUGIN_CTA` can opt in; grog ignores remote settings. Defaults off.
     pub plugin_cta_enabled: bool,
     /// Marketplace source name the plugin CTA draws candidates from, when
     /// `[marketplace].plugin_cta_marketplace` is set in the effective config.

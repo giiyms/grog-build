@@ -1,7 +1,7 @@
 //! Config-value resolution leaf types and per-model laziness config,
 //! extracted from xai-grok-shell for dependency inversion.
 
-use xai_grok_config::env_bool;
+use xai_grok_config::env_bool_grog_or_grok;
 
 /// Where a resolved config value came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
@@ -51,7 +51,7 @@ pub struct BoolFlag {
 
 impl BoolFlag {
     pub fn env(env_var: &str) -> Self {
-        Self::env_value(env_bool(env_var))
+        Self::env_value(env_bool_grog_or_grok(env_var))
     }
 
     /// The environment tier already read, for a resolver handed every tier

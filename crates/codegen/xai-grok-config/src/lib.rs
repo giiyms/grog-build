@@ -90,3 +90,49 @@ pub fn env_bool(name: &str) -> Option<bool> {
         _ => None,
     }
 }
+
+/// `GROG_*` spelling of a `GROK_*` env name. `None` when `name` has no `GROK_` prefix.
+pub fn grog_env_alias(name: &str) -> Option<String> {
+    name.strip_prefix("GROK_")
+        .map(|rest| format!("GROG_{rest}"))
+}
+
+/// Prefer `GROG_*` over `GROK_*` when both are set. Names without a `GROK_` prefix
+/// are read as-is.
+pub fn env_bool_grog_or_grok(name: &str) -> Option<bool> {
+    if let Some(grog) = grog_env_alias(name)
+        && let Some(value) = env_bool(&grog)
+    {
+        return Some(value);
+    }
+    env_bool(name)
+}
+
+#[cfg(test)]
+mod env_alias_tests {
+    use super::*;
+
+    #[test]
+    fn grog_env_alias_only_rewrites_grok_prefix() {
+        assert_eq!(
+            grog_env_alias("GROK_TELEMETRY_ENABLED").as_deref(),
+            Some("GROG_TELEMETRY_ENABLED")
+        );
+        assert_eq!(grog_env_alias("DISABLE_TELEMETRY"), None);
+        assert_eq!(grog_env_alias("GROG_HOME"), None);
+    }
+
+    #[test]
+    fn env_bool_grog_or_grok_prefers_grog_spelling() {
+        unsafe { std::env::set_var("GROK_PRIVACY_ALIAS_TEST", "0") };
+        unsafe { std::env::set_var("GROG_PRIVACY_ALIAS_TEST", "1") };
+        assert_eq!(env_bool_grog_or_grok("GROK_PRIVACY_ALIAS_TEST"), Some(true));
+        unsafe { std::env::remove_var("GROG_PRIVACY_ALIAS_TEST") };
+        assert_eq!(
+            env_bool_grog_or_grok("GROK_PRIVACY_ALIAS_TEST"),
+            Some(false)
+        );
+        unsafe { std::env::remove_var("GROK_PRIVACY_ALIAS_TEST") };
+        assert_eq!(env_bool_grog_or_grok("GROK_PRIVACY_ALIAS_TEST"), None);
+    }
+}

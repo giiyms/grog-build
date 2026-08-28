@@ -3327,7 +3327,20 @@ fn e2e_enterprise_custom_endpoint_skips_xai_defaults() {
         !resolved.contains_key(crate::models::default_model()),
         "xAI default must not leak into enterprise model list"
     );
-    assert_eq!(resolved.len(), 1, "only the prefetched enterprise model");
+    let http: Vec<_> = resolved
+        .iter()
+        .filter(|(_, e)| !e.base_url.starts_with("grog://"))
+        .collect();
+    assert_eq!(
+        http.len(),
+        1,
+        "only the prefetched enterprise model besides grog natives"
+    );
+    assert_eq!(http[0].0.as_str(), "acme-model");
+    assert!(
+        resolved.keys().any(|k| k.starts_with("claude-bridge/")),
+        "grog native catalogs are local CLI/OAuth, not xAI HTTP"
+    );
 }
 #[test]
 fn e2e_default_endpoint_still_injects_defaults() {
@@ -4129,7 +4142,11 @@ fn resolve_trace_upload_honors_config_when_telemetry_on() {
     assert_eq!(r.source, ConfigSource::Config);
     cfg.telemetry.trace_upload = None;
     let r = cfg.resolve_trace_upload();
-    assert!(r.value, "defaults on when telemetry fully enabled");
+    assert!(
+        !r.value,
+        "grog defaults trace upload off even when telemetry is on"
+    );
+    assert_eq!(r.source, ConfigSource::Default);
 }
 #[test]
 #[serial]
@@ -6553,6 +6570,12 @@ fn is_telemetry_explicitly_disabled_sync_env_signals() {
     unsafe { std::env::set_var("DISABLE_TELEMETRY", "1") };
     assert!(is_telemetry_explicitly_disabled_sync());
     unsafe { std::env::remove_var("DISABLE_TELEMETRY") };
+    unsafe { std::env::remove_var("GROK_TELEMETRY_ENABLED") };
+    unsafe { std::env::remove_var("GROG_TELEMETRY_ENABLED") };
+    assert!(
+        is_telemetry_explicitly_disabled_sync(),
+        "grog treats unset telemetry as disabled"
+    );
 }
 #[test]
 fn version_overrides_apply_into_typed_config() {
@@ -7113,11 +7136,11 @@ fn resolve_model_list_prefetch_visibility_matches_auth_and_server_list() {
     let resolved = resolve_model_list(&cfg, Some(p));
     let sess: Vec<_> = resolved
         .values()
-        .filter(|e| e.visible_for_auth(true))
+        .filter(|e| e.visible_for_auth(true) && !e.base_url.starts_with("grog://"))
         .collect();
     let api: Vec<_> = resolved
         .values()
-        .filter(|e| e.visible_for_auth(false))
+        .filter(|e| e.visible_for_auth(false) && !e.base_url.starts_with("grog://"))
         .collect();
     assert_eq!(sess.len(), 1);
     assert_eq!(api.len(), 1);
@@ -7148,7 +7171,39 @@ fn resolve_model_list_prefetch_replaces_bundled_entirely() {
 fn resolve_model_list_empty_prefetch_yields_empty_base() {
     let cfg = Config::default();
     let resolved = resolve_model_list(&cfg, Some(IndexMap::new()));
-    assert!(resolved.is_empty());
+    assert!(
+        resolved.values().all(|e| e.base_url.starts_with("grog://")),
+        "empty prefetch must drop xAI defaults; grog native catalog may remain"
+    );
+    assert!(resolved.contains_key("claude-bridge/claude-opus-4-6"));
+    assert!(resolved.contains_key("antigravity/gemini-3.6-flash"));
+    assert!(resolved.contains_key("codex/gpt-5.3-codex"));
+}
+#[test]
+fn resolve_model_list_merges_grog_native_catalog_without_overwriting() {
+    let cfg = Config::default();
+    let mut p = IndexMap::new();
+    let mut kept = prefetch_model_entry(
+        "claude-bridge/claude-opus-4-6",
+        200_000,
+        ApiBackend::default(),
+    );
+    kept.info.base_url = "https://keep.example/v1".into();
+    p.insert("claude-bridge/claude-opus-4-6".into(), kept);
+    let resolved = resolve_model_list(&cfg, Some(p));
+    assert_eq!(
+        resolved
+            .get("claude-bridge/claude-opus-4-6")
+            .expect("kept key")
+            .base_url,
+        "https://keep.example/v1",
+        "existing keys must not be overwritten by the grog catalog"
+    );
+    let flash = resolved
+        .get("antigravity/gemini-3.6-flash")
+        .expect("grog catalog still inserts other natives");
+    assert_eq!(flash.base_url, "grog://antigravity");
+    assert!(flash.user_selectable);
 }
 /// Regression: enterprise managed config overlays env_key on an oauth-only
 /// catalog entry. BYOK must force visibility for API-key users so a
@@ -7538,4 +7593,69 @@ fn a_status_line_the_parser_could_not_read_in_full_reaches_grok_inspect() {
         1
     );
     assert_eq!(cfg.ui.theme.as_deref(), Some("kanagawa"));
+}
+
+#[test]
+#[serial]
+fn grog_privacy_remote_cannot_enable_telemetry_or_marketplace() {
+    unsafe { std::env::remove_var("GROK_TELEMETRY_ENABLED") };
+    unsafe { std::env::remove_var("GROG_TELEMETRY_ENABLED") };
+    unsafe { std::env::remove_var("GROK_TELEMETRY_TRACE_UPLOAD") };
+    unsafe { std::env::remove_var("GROG_TELEMETRY_TRACE_UPLOAD") };
+    unsafe { std::env::remove_var("GROK_OFFICIAL_MARKETPLACE_AUTO_REGISTER") };
+    unsafe { std::env::remove_var("GROG_OFFICIAL_MARKETPLACE_AUTO_REGISTER") };
+    unsafe { std::env::remove_var("GROK_FEEDBACK_ENABLED") };
+    unsafe { std::env::remove_var("GROG_FEEDBACK_ENABLED") };
+    unsafe { std::env::remove_var("GROK_FEEDBACK_TRACE_CARD") };
+    let mut cfg = Config::default();
+    cfg.remote_settings = Some(crate::util::config::RemoteSettings {
+        telemetry_enabled: Some(true),
+        telemetry_mode: Some("true".into()),
+        trace_upload_enabled: Some(true),
+        official_marketplace_auto_register: Some(true),
+        feedback_enabled: Some(true),
+        feedback_trace_card_enabled: Some(true),
+        ..Default::default()
+    });
+    assert!(
+        cfg.resolve_telemetry_mode().value.is_disabled(),
+        "remote settings must not turn grog telemetry on"
+    );
+    assert_eq!(cfg.resolve_telemetry_mode().source, ConfigSource::Default);
+    assert!(!cfg.resolve_trace_upload().value);
+    assert!(!cfg.resolve_official_marketplace_auto_register().value);
+    assert!(!cfg.is_feature_enabled(Feature::Feedback));
+    assert!(!cfg.is_feature_enabled(Feature::FeedbackTraceCard));
+}
+
+#[test]
+#[serial]
+fn grog_telemetry_grog_env_alias_opts_in() {
+    unsafe { std::env::remove_var("GROK_TELEMETRY_ENABLED") };
+    unsafe { std::env::set_var("GROG_TELEMETRY_ENABLED", "1") };
+    let cfg = Config::default();
+    let mode = cfg.resolve_telemetry_mode();
+    assert!(mode.value.is_enabled());
+    assert_eq!(mode.source, ConfigSource::Env);
+    unsafe { std::env::remove_var("GROG_TELEMETRY_ENABLED") };
+}
+
+#[test]
+#[serial]
+fn grog_privacy_defaults_are_off() {
+    unsafe { std::env::remove_var("GROK_TELEMETRY_ENABLED") };
+    unsafe { std::env::remove_var("GROG_TELEMETRY_ENABLED") };
+    unsafe { std::env::remove_var("GROK_TELEMETRY_TRACE_UPLOAD") };
+    unsafe { std::env::remove_var("GROG_TELEMETRY_TRACE_UPLOAD") };
+    unsafe { std::env::remove_var("GROK_FEEDBACK_ENABLED") };
+    unsafe { std::env::remove_var("GROG_FEEDBACK_ENABLED") };
+    let cfg = Config::default();
+    assert!(cfg.resolve_telemetry_mode().value.is_disabled());
+    assert!(!cfg.resolve_trace_upload().value);
+    assert!(!cfg.resolve_official_marketplace_auto_register().value);
+    assert!(!cfg.is_feature_enabled(Feature::Feedback));
+    assert!(!cfg.is_feature_enabled(Feature::FeedbackTraceCard));
+    assert!(!cfg.telemetry.mixpanel_enabled);
+    assert!(cfg.telemetry.events_url.is_none());
+    assert!(cfg.telemetry.mixpanel_token.is_none());
 }

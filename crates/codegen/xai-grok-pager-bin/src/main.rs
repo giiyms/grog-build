@@ -1874,9 +1874,13 @@ fn dispatch_doctor_if_requested(args: &PagerArgs) -> bool {
         eprintln!("Error: {error:#}");
         std::process::exit(1);
     }
+    if doctor_args.command.is_none() && !doctor_args.json {
+        print!("{}", grog_providers::doctor::format_doctor_report());
+    }
     true
 }
 fn main() {
+    xai_grok_shell::tools::grog_ask::ensure_registered();
     xai_grok_version::set_full_version(env!("VERSION_WITH_COMMIT"));
     xai_grok_telemetry::startup::mark_process_start();
     if let Some(code) = xai_grok_pager::app::mermaid_worker::maybe_run_render_subprocess() {
@@ -2185,12 +2189,25 @@ async fn async_main(args: PagerArgs) -> Result<()> {
                 .await;
             }
             Command::Login {
+                provider,
                 legacy: _,
                 oauth,
                 device_auth,
                 devbox,
             } => {
                 init_tracing_simple("cli");
+                if let Some(provider) = provider {
+                    match grog_providers::doctor::login(&provider) {
+                        Ok(message) => {
+                            println!("{message}");
+                            xai_grok_shell::instrumentation::finalize_and_exit(0);
+                        }
+                        Err(error) => {
+                            eprintln!("grog login: {error}");
+                            std::process::exit(1);
+                        }
+                    }
+                }
                 let _otel_guard = xai_grok_telemetry::otel_layer::otel_guard();
                 let config = xai_grok_shell::config::load_agent_config_disk_only()
                     .map_err(|e| anyhow::anyhow!("Failed to create agent config: {e}"))?;

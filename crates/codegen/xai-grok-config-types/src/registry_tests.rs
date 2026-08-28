@@ -52,7 +52,7 @@ fn registered_settings() {
             ("ask_user_question", ("GROK_ASK_USER_QUESTION", true)),
             ("voice_mode", ("GROK_VOICE_MODE", true)),
             ("write_file", ("GROK_WRITE_FILE", true)),
-            ("feedback", ("GROK_FEEDBACK_ENABLED", true)),
+            ("feedback", ("GROK_FEEDBACK_ENABLED", false)),
             ("feedback_trace_card", ("GROK_FEEDBACK_TRACE_CARD", false)),
             ("turn_summary", ("GROK_TURN_SUMMARY", true)),
             ("cancel_rewind", ("GROK_CANCEL_REWIND", true)),
@@ -86,8 +86,6 @@ fn every_registered_feature_reads_its_own_remote_setting() {
             Feature::AskUserQuestion => settings.ask_user_question_enabled = Some(value),
             Feature::VoiceMode => settings.voice_mode_enabled = Some(value),
             Feature::WriteFile => settings.write_file_enabled = Some(value),
-            Feature::Feedback => settings.feedback_enabled = Some(value),
-            Feature::FeedbackTraceCard => settings.feedback_trace_card_enabled = Some(value),
             Feature::TurnSummary => settings.turn_summary = Some(value),
             Feature::CancelRewind => settings.cancel_rewind_enabled = Some(value),
             Feature::CompactionVerbatimInput => settings.compaction_verbatim_input = Some(value),
@@ -96,9 +94,9 @@ fn every_registered_feature_reads_its_own_remote_setting() {
             Feature::SubagentWorktreeSnapshot => {
                 settings.subagent_worktree_snapshot_enabled = Some(value)
             }
-            // The one row with no remote tier, stated as such rather than as a
-            // projection that reads nothing.
-            Feature::BackendTools => {
+            // No remote tier: grog does not let xAI settings enable data-sharing
+            // features, and `backend_tools` never had one.
+            Feature::Feedback | Feature::FeedbackTraceCard | Feature::BackendTools => {
                 assert!(spec.remote.is_none(), "{} grew a remote tier", spec.key);
                 continue;
             }
