@@ -1604,7 +1604,9 @@ fn grog_sampling_error(message: String) -> xai_grok_sampler::SamplingErrorInfo {
 /// must not spawn Claude/agy with AcceptEdits. `/model` on a native provider
 /// still uses a full provider turn because those sessions keep write tools.
 fn grog_native_uses_isolated_ask(tools: &[xai_grok_sampling_types::ToolSpec]) -> bool {
-    !tools.iter().any(|tool| tool_can_mutate_workspace(&tool.name))
+    !tools
+        .iter()
+        .any(|tool| tool_can_mutate_workspace(&tool.name))
 }
 
 fn tool_can_mutate_workspace(name: &str) -> bool {
@@ -1637,10 +1639,14 @@ async fn grog_native_turn(
         .unwrap_or_else(|| "unknown".to_string());
     let prompt = flatten_conversation_prompt(&request);
     let isolated = grog_native_uses_isolated_ask(&request.tools);
+    let from_request = request.reasoning_effort.map(|e| e.to_string());
+    let effort = from_request
+        .as_deref()
+        .or_else(|| grog_providers::default_effort(&model));
     let result = if isolated {
-        grog_providers::consult::ask(&model, &prompt).await
+        grog_providers::consult::ask_with_effort(&model, &prompt, effort).await
     } else {
-        grog_providers::consult::provider_turn(&model, &prompt).await
+        grog_providers::consult::provider_turn_with_effort(&model, &prompt, effort).await
     };
     match result {
         Ok(outcome) => {

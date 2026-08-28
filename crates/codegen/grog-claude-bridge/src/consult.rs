@@ -6,8 +6,8 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
 use crate::models::{AskClaudeMode, LongContextSettings};
-use crate::spawn::{ask_claude_argv, provider_turn_argv, AskClaudeSpec, ProviderTurnSpec};
-use crate::stream::{parse_stream_json_line, StreamEvent};
+use crate::spawn::{AskClaudeSpec, ProviderTurnSpec, ask_claude_argv, provider_turn_argv};
+use crate::stream::{StreamEvent, parse_stream_json_line};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsultResult {
@@ -34,7 +34,11 @@ pub enum ConsultError {
 }
 
 /// Isolated AskClaude consult (`read` tools, no session persistence).
-pub async fn ask_claude(prompt: &str, model_id: &str) -> Result<ConsultResult, ConsultError> {
+pub async fn ask_claude(
+    prompt: &str,
+    model_id: &str,
+    effort: Option<&str>,
+) -> Result<ConsultResult, ConsultError> {
     let plan = ask_claude_argv(AskClaudeSpec {
         prompt,
         model_id,
@@ -42,12 +46,17 @@ pub async fn ask_claude(prompt: &str, model_id: &str) -> Result<ConsultResult, C
         mode: AskClaudeMode::Read,
         isolated: true,
         claude_bin: None,
+        effort,
     });
     run_print_plan(&plan.program, &plan.args).await
 }
 
 /// Full-session provider turn (no loopback MCP yet).
-pub async fn provider_turn(prompt: &str, model_id: &str) -> Result<ConsultResult, ConsultError> {
+pub async fn provider_turn(
+    prompt: &str,
+    model_id: &str,
+    effort: Option<&str>,
+) -> Result<ConsultResult, ConsultError> {
     let plan = provider_turn_argv(ProviderTurnSpec {
         prompt,
         model_id,
@@ -55,6 +64,7 @@ pub async fn provider_turn(prompt: &str, model_id: &str) -> Result<ConsultResult
         resume_session: None,
         mcp_config_path: None,
         claude_bin: None,
+        effort,
     });
     run_print_plan(&plan.program, &plan.args).await
 }

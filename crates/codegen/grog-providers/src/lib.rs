@@ -89,6 +89,18 @@ impl ModelRef {
     }
 }
 
+/// Default thinking-effort token for Ask*/council when the caller does not
+/// set one. agy max is `high`; Codex Luna uses `xhigh`; Claude Opus 5 uses
+/// `medium`.
+pub fn default_effort(model_id: &str) -> Option<&'static str> {
+    match ModelRef::parse(model_id).provider {
+        ProviderId::Codex => Some(grog_codex::DEFAULT_CODEX_EFFORT),
+        ProviderId::ClaudeBridge => Some(grog_claude_bridge::DEFAULT_CLAUDE_EFFORT),
+        ProviderId::Antigravity => Some(grog_antigravity::DEFAULT_ANTIGRAVITY_EFFORT),
+        ProviderId::Http => None,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CatalogEntry {
     pub provider: ProviderId,
@@ -128,12 +140,12 @@ mod tests {
 
     #[test]
     fn parses_qualified_ids() {
-        let r = ModelRef::parse("claude-bridge/claude-opus-4-6");
+        let r = ModelRef::parse("claude-bridge/claude-opus-5");
         assert_eq!(r.provider, ProviderId::ClaudeBridge);
-        assert_eq!(r.model, "claude-opus-4-6");
-        let r = ModelRef::parse("agy/gemini-3.6-flash");
+        assert_eq!(r.model, "claude-opus-5");
+        let r = ModelRef::parse("agy/gemini-3.7-flash-high");
         assert_eq!(r.provider, ProviderId::Antigravity);
-        let r = ModelRef::parse("codex/gpt-5.1-codex");
+        let r = ModelRef::parse("codex/gpt-5.6-luna");
         assert_eq!(r.provider, ProviderId::Codex);
         assert_eq!(r.qualified(), grog_codex::DEFAULT_CODEX_QUALIFIED);
     }
@@ -143,6 +155,23 @@ mod tests {
         let r = ModelRef::parse("claude-opus-4-8");
         assert_eq!(r.provider, ProviderId::ClaudeBridge);
         assert_eq!(r.qualified(), "claude-bridge/claude-opus-4-8");
+    }
+
+    #[test]
+    fn default_effort_matches_council_seats() {
+        assert_eq!(
+            default_effort(grog_codex::DEFAULT_CODEX_QUALIFIED),
+            Some("xhigh")
+        );
+        assert_eq!(
+            default_effort(grog_claude_bridge::DEFAULT_CLAUDE_QUALIFIED),
+            Some("medium")
+        );
+        assert_eq!(
+            default_effort(grog_antigravity::DEFAULT_ANTIGRAVITY_QUALIFIED),
+            Some("high")
+        );
+        assert_eq!(default_effort("grok-4"), None);
     }
 
     #[test]
@@ -159,13 +188,27 @@ mod tests {
             .iter()
             .map(|e| format!("{}/{}", e.provider.as_str(), e.id))
             .collect();
+        assert!(
+            keys.iter()
+                .any(|k| k == grog_claude_bridge::DEFAULT_CLAUDE_QUALIFIED)
+        );
         assert!(keys.iter().any(|k| k == "claude-bridge/claude-opus-4-6"));
+        assert!(
+            keys.iter()
+                .any(|k| k == grog_antigravity::DEFAULT_ANTIGRAVITY_QUALIFIED)
+        );
+        assert!(
+            keys.iter()
+                .any(|k| k == "antigravity/gemini-3.7-flash-medium")
+        );
         assert!(keys.iter().any(|k| k == "antigravity/gemini-3.6-flash"));
         assert!(
             keys.iter()
                 .any(|k| k == grog_codex::DEFAULT_CODEX_QUALIFIED)
         );
         assert_eq!(keys[0], grog_codex::DEFAULT_CODEX_QUALIFIED);
+        assert_eq!(grog_codex::DEFAULT_CODEX_MODEL, "gpt-5.6-luna");
         assert_ne!(grog_codex::DEFAULT_CODEX_MODEL, "gpt-5.3-codex");
+        assert_ne!(grog_codex::DEFAULT_CODEX_MODEL, "gpt-5.1-codex");
     }
 }

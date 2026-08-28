@@ -27,6 +27,7 @@ pub struct ProviderTurnSpec<'a> {
     pub extra_add_dir: Option<&'a str>,
     pub resume_conversation: Option<&'a str>,
     pub agy_bin: Option<&'a str>,
+    pub effort: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,6 +35,7 @@ pub struct AskAntigravitySpec<'a> {
     pub prompt: &'a str,
     pub model: &'a str,
     pub agy_bin: Option<&'a str>,
+    pub effort: Option<&'a str>,
 }
 
 /// The prompt token that `-p`/`--print`/`--prompt` will consume.
@@ -55,6 +57,10 @@ pub fn provider_turn_argv(spec: ProviderTurnSpec<'_>) -> AgySpawnPlan {
     if spec.skip_permissions {
         args.push("--dangerously-skip-permissions".into());
     }
+    args.extend([
+        "--effort".into(),
+        crate::agy_effort_flag(spec.effort).into(),
+    ]);
     if let Some(dir) = spec.extra_add_dir {
         args.extend(["--add-dir".into(), dir.into()]);
     }
@@ -83,6 +89,7 @@ pub fn ask_agy_argv(spec: AskAntigravitySpec<'_>) -> AgySpawnPlan {
         extra_add_dir: None,
         resume_conversation: None,
         agy_bin: spec.agy_bin,
+        effort: spec.effort.or(Some(crate::DEFAULT_ANTIGRAVITY_EFFORT)),
     })
 }
 
@@ -106,6 +113,7 @@ mod tests {
             extra_add_dir: Some("/tmp/grog-agy-mcp"),
             resume_conversation: Some("abc"),
             agy_bin: None,
+            effort: None,
         });
         assert_eq!(plan.program, "agy");
         assert!(plan.args.contains(&"--dangerously-skip-permissions".into()));
@@ -124,6 +132,7 @@ mod tests {
             prompt: "second opinion",
             model: "gemini-3.1-pro",
             agy_bin: Some("/usr/bin/agy"),
+            effort: Some("high"),
         });
         assert!(!plan.args.iter().any(|a| a == "--add-dir"));
         assert_eq!(plan.program, "/usr/bin/agy");
@@ -139,11 +148,12 @@ mod tests {
     #[test]
     fn ask_prompt_is_the_user_query_not_model_flag() {
         let prompt = "should we cache invalidation?";
-        let model = "gemini-3.6-flash";
+        let model = crate::DEFAULT_ANTIGRAVITY_MODEL;
         let plan = ask_agy_argv(AskAntigravitySpec {
             prompt,
             model,
             agy_bin: None,
+            effort: None,
         });
 
         let p = print_flag_index(&plan.args);
@@ -184,6 +194,18 @@ mod tests {
         );
         assert!(plan.args[..p].windows(2).any(|w| w == ["--mode", "plan"]));
         assert!(
+            plan.args[..p].windows(2).any(|w| w == ["--effort", "high"]),
+            "Ask/council must pass agy's max --effort before -p: {:?}",
+            plan.args
+        );
+        assert!(
+            !plan.args[..p]
+                .windows(2)
+                .any(|w| w == ["--effort", "medium"]),
+            "default Ask is max thinking, not medium: {:?}",
+            plan.args
+        );
+        assert!(
             !plan.args[p + 1].starts_with('-'),
             "prompt slot must not be a flag, got {}",
             plan.args[p + 1]
@@ -200,6 +222,7 @@ mod tests {
             extra_add_dir: None,
             resume_conversation: None,
             agy_bin: None,
+            effort: Some("high"),
         });
         assert_eq!(prompt_from_args(&plan.args), Some("edit the file"));
         let p = print_flag_index(&plan.args);

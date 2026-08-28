@@ -66,10 +66,15 @@ mod builtin_tests {
         assert!(script.contains("capability_mode: \"read-only\""));
         assert!(script.contains("parallel(opinion_jobs)"));
         assert!(script.contains("parallel(review_jobs)"));
-        assert!(script.contains("claude-bridge/claude-opus-4-6"));
-        assert!(script.contains("antigravity/gemini-3.6-flash"));
-        assert!(script.contains("codex/gpt-5.1-codex"));
+        assert!(script.contains("claude-bridge/claude-opus-5"));
+        assert!(script.contains("antigravity/gemini-3.7-flash-high"));
+        assert!(script.contains("codex/gpt-5.6-luna"));
         assert!(!script.contains("codex/gpt-5.3-codex"));
+        assert!(!script.contains("codex/gpt-5.1-codex"));
+        assert!(script.contains("effort: member_effort"));
+        assert!(script.contains("return \"xhigh\""));
+        assert!(script.contains("return \"medium\""));
+        assert!(script.contains("return \"high\""));
         assert!(script.contains("\"council-chair-verdict\""));
         assert!(script.contains("phase(\"Opinions\")"));
         assert!(script.contains("phase(\"Review\")"));

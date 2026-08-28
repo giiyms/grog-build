@@ -196,7 +196,8 @@ fn degraded_membership_returns_seat_and_chair_not_null() {
             if opts.label.as_deref() == Some("council-chair-verdict") {
                 return agent_ok("  pipeline works, but membership is degraded  ");
             }
-            if opts.model.as_deref() == Some("claude-bridge/claude-opus-4-6") {
+            if opts.model.as_deref() == Some("claude-bridge/claude-opus-5") {
+                assert_eq!(opts.effort.as_deref(), Some("medium"));
                 return agent_ok("Claude's independent smoke-test answer.");
             }
             agent_fail()
@@ -221,7 +222,7 @@ fn degraded_membership_returns_seat_and_chair_not_null() {
         "one live seat skips ranking: {report}"
     );
     assert!(
-        report.contains("claude-bridge/claude-opus-4-6"),
+        report.contains("claude-bridge/claude-opus-5"),
         "named opinion must remain: {report}"
     );
     assert!(
@@ -235,7 +236,7 @@ fn degraded_membership_returns_seat_and_chair_not_null() {
 }
 
 #[test]
-fn two_seats_run_ranking_then_visible_verdict() {
+fn three_seats_run_ranking_then_visible_verdict() {
     let review_count = Arc::new(AtomicUsize::new(0));
     let review_flag = review_count.clone();
     let result = run_council(
@@ -257,18 +258,29 @@ fn two_seats_run_ranking_then_visible_verdict() {
                 return agent_ok("Ship approach A; B is a close second.");
             }
             match opts.model.as_deref() {
-                Some("claude-bridge/claude-opus-4-6") => agent_ok("Use a write-through cache."),
-                Some("antigravity/gemini-3.6-flash") => agent_ok("Use a write-back cache."),
+                Some("claude-bridge/claude-opus-5") => {
+                    assert_eq!(opts.effort.as_deref(), Some("medium"));
+                    agent_ok("Use a write-through cache.")
+                }
+                Some("antigravity/gemini-3.7-flash-high") => {
+                    assert_eq!(opts.effort.as_deref(), Some("high"));
+                    agent_ok("Use a write-back cache.")
+                }
+                Some("codex/gpt-5.6-luna") => {
+                    assert_eq!(opts.effort.as_deref(), Some("xhigh"));
+                    agent_ok("Use a two-tier cache.")
+                }
                 _ => agent_fail(),
             }
         },
     );
 
     let report = report_str(&result);
-    assert_eq!(review_count.load(Ordering::SeqCst), 2);
+    assert_eq!(review_count.load(Ordering::SeqCst), 3);
     assert!(report.contains("Ship approach A; B is a close second."));
     assert!(report.contains("Use a write-through cache."));
     assert!(report.contains("Use a write-back cache."));
+    assert!(report.contains("Use a two-tier cache."));
     assert!(report.contains("FINAL RANKING:"));
     assert!(!report.contains("Skipped anonymous review"));
 }
@@ -276,7 +288,7 @@ fn two_seats_run_ranking_then_visible_verdict() {
 #[test]
 fn chair_failure_still_returns_the_live_seat() {
     let result = run_council(
-        serde_json::json!({ "query": "smoke", "members": ["claude-bridge/claude-opus-4-6"] }),
+        serde_json::json!({ "query": "smoke", "members": ["claude-bridge/claude-opus-5"] }),
         |opts| {
             if opts.label.as_deref() == Some("council-chair-verdict") {
                 return agent_fail();

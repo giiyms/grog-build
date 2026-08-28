@@ -9,12 +9,12 @@ pub mod models;
 pub mod spawn;
 pub mod stream;
 
+pub use consult::{ConsultError, ConsultResult, ask_claude, provider_turn, run_print_plan};
 pub use models::{
-    resolve_cli_model, AskClaudeMode, ClaudeBridgeModel, LongContextSettings, Plan,
-    CLAUDE_BRIDGE_MODELS,
+    AskClaudeMode, CLAUDE_BRIDGE_MODELS, ClaudeBridgeModel, DEFAULT_CLAUDE_EFFORT,
+    DEFAULT_CLAUDE_MODEL, DEFAULT_CLAUDE_QUALIFIED, LongContextSettings, Plan, resolve_cli_model,
 };
 pub use spawn::{
-    ask_claude_argv, provider_turn_argv, AskClaudeSpec, ClaudeSpawnPlan, ProviderTurnSpec,
+    AskClaudeSpec, ClaudeSpawnPlan, ProviderTurnSpec, ask_claude_argv, provider_turn_argv,
 };
-pub use consult::{ask_claude, provider_turn, run_print_plan, ConsultError, ConsultResult};
-pub use stream::{parse_stream_json_line, StreamEvent};
+pub use stream::{StreamEvent, parse_stream_json_line};

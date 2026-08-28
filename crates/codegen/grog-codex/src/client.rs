@@ -19,10 +19,23 @@ pub enum ClientError {
     Empty,
 }
 
+/// Responses-shaped body for a Codex consult. `reasoning.effort` is the
+/// Codex thinking flag (`xhigh` for Luna council / AskCodex).
+pub fn consult_body(model: &str, prompt: &str, effort: &str) -> serde_json::Value {
+    serde_json::json!({
+        "model": model,
+        "input": prompt,
+        "store": false,
+        "stream": false,
+        "reasoning": { "effort": effort },
+    })
+}
+
 pub fn consult_sync(
     auth: &CodexAuth,
     model: &str,
     prompt: &str,
+    effort: Option<&str>,
 ) -> Result<ConsultResult, ClientError> {
     let tokens = auth.tokens.as_ref().ok_or(ClientError::NoToken)?;
     if tokens.access_token.is_empty() {
@@ -30,12 +43,8 @@ pub fn consult_sync(
     }
     let account = chatgpt_account_id(auth).unwrap_or_default();
     let url = format!("{CODEX_BACKEND}/codex/responses");
-    let body = serde_json::json!({
-        "model": model,
-        "input": prompt,
-        "store": false,
-        "stream": false,
-    });
+    let effort = effort.unwrap_or(crate::DEFAULT_CODEX_EFFORT);
+    let body = consult_body(model, prompt, effort);
     let mut builder = reqwest::blocking::Client::new()
         .post(&url)
         .bearer_auth(&tokens.access_token)
@@ -148,5 +157,14 @@ mod tests {
             "output": [{"content": [{"text": "a"}, {"text": "b"}]}]
         });
         assert_eq!(extract_output_text(&v).as_deref(), Some("ab"));
+    }
+
+    #[test]
+    fn consult_body_sends_luna_xhigh_reasoning_effort() {
+        let body = consult_body("gpt-5.6-luna", "hello", crate::DEFAULT_CODEX_EFFORT);
+        assert_eq!(body["model"], "gpt-5.6-luna");
+        assert_eq!(body["reasoning"]["effort"], "xhigh");
+        assert_ne!(body["model"], "gpt-5.3-codex");
+        assert_ne!(body["model"], "gpt-5.1-codex");
     }
 }

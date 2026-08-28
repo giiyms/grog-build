@@ -67,6 +67,19 @@ fn chair_opts(label, phase_name, apply_writes, chair) {
     opts
 }
 
+fn member_effort(m) {
+    if m.contains("codex/") {
+        return "xhigh";
+    }
+    if m.contains("claude") {
+        return "medium";
+    }
+    if m.contains("antigravity/") || m.contains("agy/") {
+        return "high";
+    }
+    ()
+}
+
 if args == () {
     pause("verification", "No council query was provided. Run /council <query>, or pass args.query.");
 }
@@ -76,9 +89,9 @@ if query == () || query == "" {
 }
 
 let members = [
-    "claude-bridge/claude-opus-4-6",
-    "antigravity/gemini-3.6-flash",
-    "codex/gpt-5.1-codex",
+    "claude-bridge/claude-opus-5",
+    "antigravity/gemini-3.7-flash-high",
+    "codex/gpt-5.6-luna",
 ];
 if args.members != () {
     let override_members = [];
@@ -106,6 +119,7 @@ for m in members {
         label: "council-opinion-" + i.to_string(),
         capability_mode: "read-only",
         model: m,
+        effort: member_effort(m),
         phase: "Opinions",
     });
     i += 1;
@@ -163,6 +177,7 @@ if seats.len() >= 2 {
             label: "council-review-" + ri.to_string(),
             capability_mode: "read-only",
             model: s.member,
+            effort: member_effort(s.member),
             phase: "Review",
         });
         ri += 1;

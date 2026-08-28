@@ -3,8 +3,9 @@
 //! ChatGPT Plus/Pro Codex subscriptions advertise a consumer set that does
 //! **not** include `gpt-5.3-codex` (that id is rejected on consumer ChatGPT
 //! accounts). Council, AskCodex, and the documented grog default use
-//! [`DEFAULT_CODEX_MODEL`]. Prefer [`select_codex_model_id`] when a live
-//! advertised list is available after login.
+//! [`DEFAULT_CODEX_MODEL`] (`gpt-5.6-luna`) with [`DEFAULT_CODEX_EFFORT`]
+//! (`xhigh`). Prefer [`select_codex_model_id`] when a live advertised list
+//! is available after login.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CodexModel {
@@ -12,16 +13,21 @@ pub struct CodexModel {
     pub display_name: &'static str,
 }
 
-/// Default Codex id for council / AskCodex / `[models].default`.
-/// Consumer ChatGPT Codex subscriptions can run this; they reject `gpt-5.3-codex`.
-pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.1-codex";
+/// Codex CLI / ChatGPT Codex slug for GPT-5.6 Luna.
+/// Consumer ChatGPT Plus/Pro can run this; they reject `gpt-5.3-codex`.
+pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.6-luna";
 
 /// Qualified `provider/model` form of [`DEFAULT_CODEX_MODEL`].
-pub const DEFAULT_CODEX_QUALIFIED: &str = "codex/gpt-5.1-codex";
+pub const DEFAULT_CODEX_QUALIFIED: &str = "codex/gpt-5.6-luna";
+
+/// Thinking / reasoning effort for Luna consults (Responses `reasoning.effort`).
+/// Codex CLI supports `none`, `low`, `medium`, `high`, `xhigh`, and `max`.
+pub const DEFAULT_CODEX_EFFORT: &str = "xhigh";
 
 /// Consumer-first advertised ids. `gpt-5.3-codex` is kept in the fallback
 /// catalog for API-org accounts but is never the unadvertised default.
 pub const CONSUMER_CODEX_MODELS: &[&str] = &[
+    "gpt-5.6-luna",
     "gpt-5.1-codex",
     "gpt-5.1-codex-max",
     "gpt-5.1-codex-mini",
@@ -31,6 +37,10 @@ pub const CONSUMER_CODEX_MODELS: &[&str] = &[
 ];
 
 pub const CODEX_FALLBACK_MODELS: &[CodexModel] = &[
+    CodexModel {
+        id: "gpt-5.6-luna",
+        display_name: "GPT-5.6 Luna",
+    },
     CodexModel {
         id: "gpt-5.1-codex",
         display_name: "GPT-5.1 Codex",
@@ -80,11 +90,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_is_consumer_not_gpt_5_3() {
-        assert_eq!(DEFAULT_CODEX_MODEL, "gpt-5.1-codex");
-        assert_eq!(DEFAULT_CODEX_QUALIFIED, "codex/gpt-5.1-codex");
+    fn default_is_luna_not_gpt_5_3() {
+        assert_eq!(DEFAULT_CODEX_MODEL, "gpt-5.6-luna");
+        assert_eq!(DEFAULT_CODEX_QUALIFIED, "codex/gpt-5.6-luna");
+        assert_eq!(DEFAULT_CODEX_EFFORT, "xhigh");
         assert_eq!(CODEX_FALLBACK_MODELS[0].id, DEFAULT_CODEX_MODEL);
         assert_ne!(DEFAULT_CODEX_MODEL, "gpt-5.3-codex");
+        assert_ne!(DEFAULT_CODEX_MODEL, "gpt-5.1-codex");
         assert!(
             CODEX_FALLBACK_MODELS
                 .iter()
@@ -95,7 +107,11 @@ mod tests {
 
     #[test]
     fn select_prefers_advertised_consumer_id() {
-        assert_eq!(select_codex_model_id(&[] as &[&str]), "gpt-5.1-codex");
+        assert_eq!(select_codex_model_id(&[] as &[&str]), "gpt-5.6-luna");
+        assert_eq!(
+            select_codex_model_id(&["gpt-5.3-codex", "gpt-5.6-luna"]),
+            "gpt-5.6-luna"
+        );
         assert_eq!(
             select_codex_model_id(&["gpt-5.3-codex", "gpt-5.1-codex"]),
             "gpt-5.1-codex"
