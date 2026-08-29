@@ -89,6 +89,87 @@ impl ModelRef {
     }
 }
 
+/// Catalog marker for native grog providers. This is **not** an HTTP origin.
+/// Reqwest will refuse to POST it (`grog://codex/chat/completions`). Turns
+/// must go through [`consult`] / the sampler intercept, never the HTTP client.
+pub const NATIVE_URL_SCHEME: &str = "grog://";
+
+/// `true` for the `grog://codex` (etc.) marker URLs merged into the catalog.
+pub fn is_native_base_url(url: &str) -> bool {
+    url.starts_with(NATIVE_URL_SCHEME)
+}
+
+/// Reconstruct a consult id (`codex/gpt-5.6-luna`) from a catalog key, a
+/// slug, and/or a `grog://` marker URL.
+///
+/// Council children historically stored only the slug (`gpt-5.6-luna`) on
+/// `SamplerConfig.model` while `base_url` was `grog://codex`. The slug
+/// alone looks like HTTP (`is_native_model` is false), so the intercept
+/// must also read the marker URL.
+pub fn consult_model_id(model_id: &str, base_url: Option<&str>) -> Option<String> {
+    if consult::is_native_model(model_id) {
+        return Some(model_id.to_string());
+    }
+    let url = base_url?;
+    let rest = url.strip_prefix(NATIVE_URL_SCHEME)?;
+    let provider = rest.split('/').next().filter(|s| !s.is_empty())?;
+    let pid = ProviderId::parse(provider)?;
+    if pid == ProviderId::Http {
+        return None;
+    }
+    if model_id.is_empty() {
+        return None;
+    }
+    Some(format!("{}/{}", pid.as_str(), model_id))
+}
+
+/// Where a `(model id, base_url)` pair should send tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InferenceRoute {
+    /// Claude / Codex / Antigravity — `grog-providers::consult`, not reqwest.
+    Native {
+        provider: ProviderId,
+        qualified: String,
+    },
+    Http,
+}
+
+impl InferenceRoute {
+    /// URL the HTTP sampler would POST. `None` for native routes so reqwest
+    /// never sees `grog://codex/chat/completions`.
+    pub fn sampler_chat_completions_url(&self, base_url: &str) -> Option<String> {
+        match self {
+            Self::Native { .. } => None,
+            Self::Http => {
+                if is_native_base_url(base_url) {
+                    return None;
+                }
+                Some(format!(
+                    "{}/chat/completions",
+                    base_url.trim_end_matches('/')
+                ))
+            }
+        }
+    }
+
+    pub fn is_native(&self) -> bool {
+        matches!(self, Self::Native { .. })
+    }
+}
+
+pub fn inference_route(model_id: &str, base_url: &str) -> InferenceRoute {
+    match consult_model_id(model_id, Some(base_url)) {
+        Some(qualified) => {
+            let parsed = ModelRef::parse(&qualified);
+            InferenceRoute::Native {
+                provider: parsed.provider,
+                qualified,
+            }
+        }
+        None => InferenceRoute::Http,
+    }
+}
+
 /// Default thinking-effort token for Ask*/council when the caller does not
 /// set one. agy max is `high`; Codex Luna uses `xhigh`; Claude Opus 5 uses
 /// `medium`.
@@ -210,5 +291,67 @@ mod tests {
         assert_eq!(grog_codex::DEFAULT_CODEX_MODEL, "gpt-5.6-luna");
         assert_ne!(grog_codex::DEFAULT_CODEX_MODEL, "gpt-5.3-codex");
         assert_ne!(grog_codex::DEFAULT_CODEX_MODEL, "gpt-5.1-codex");
+    }
+
+    #[test]
+    fn luna_slug_alone_is_http_until_the_grog_marker_url_is_present() {
+        assert!(!consult::is_native_model("gpt-5.6-luna"));
+        assert_eq!(
+            consult_model_id("gpt-5.6-luna", None),
+            None,
+            "bare Luna is not Codex; that is why council children died"
+        );
+        assert_eq!(
+            consult_model_id("gpt-5.6-luna", Some("grog://codex")),
+            Some(grog_codex::DEFAULT_CODEX_QUALIFIED.to_string())
+        );
+        assert_eq!(
+            consult_model_id(grog_codex::DEFAULT_CODEX_QUALIFIED, Some("grog://codex")),
+            Some(grog_codex::DEFAULT_CODEX_QUALIFIED.to_string())
+        );
+    }
+
+    #[test]
+    fn council_seats_never_produce_a_grog_scheme_reqwest_url() {
+        for (model, base) in [
+            (grog_codex::DEFAULT_CODEX_QUALIFIED, "grog://codex"),
+            ("gpt-5.6-luna", "grog://codex"),
+            (
+                grog_claude_bridge::DEFAULT_CLAUDE_QUALIFIED,
+                "grog://claude-bridge",
+            ),
+            ("claude-opus-5", "grog://claude-bridge"),
+            (
+                grog_antigravity::DEFAULT_ANTIGRAVITY_QUALIFIED,
+                "grog://antigravity",
+            ),
+            ("gemini-3.7-flash-high", "grog://antigravity"),
+        ] {
+            let route = inference_route(model, base);
+            assert!(
+                route.is_native(),
+                "{model} + {base} must be a native consult, not HTTP"
+            );
+            assert_eq!(
+                route.sampler_chat_completions_url(base),
+                None,
+                "{model} must not yield grog://…/chat/completions"
+            );
+        }
+        let http = inference_route("grok-4", "https://api.x.ai/v1");
+        assert_eq!(http, InferenceRoute::Http);
+        assert_eq!(
+            http.sampler_chat_completions_url("https://api.x.ai/v1"),
+            Some("https://api.x.ai/v1/chat/completions".into())
+        );
+    }
+
+    #[test]
+    fn native_marker_url_is_not_http() {
+        assert!(is_native_base_url("grog://codex"));
+        assert!(is_native_base_url("grog://claude-bridge"));
+        assert!(is_native_base_url("grog://antigravity"));
+        assert!(!is_native_base_url("https://api.x.ai/v1"));
+        assert!(!is_native_base_url("https://chatgpt.com/backend-api"));
     }
 }

@@ -20,7 +20,7 @@ renames and stays in a few places.
 | --- | --- |
 | Native providers | `crates/codegen/grog-*` (`grog-providers`, `grog-claude-bridge`, `grog-antigravity`, `grog-codex`) |
 | Council workflow | `crates/codegen/xai-grok-shell/src/session/workflows/council.rhai` |
-| Thin identity patches | pager bin name, `~/.grog` / `$GROG_HOME`, prompts saying **Grog**, privacy defaults, `/council` slash alias, native-turn intercept, **no x.ai/cli updater** (`grog --version`, skip grok update toast/changelog CDN) |
+| Thin identity patches | pager bin name, `~/.grog` / `$GROG_HOME`, prompts saying **Grog**, privacy defaults, `/council` slash alias, native-turn intercept (qualified `codex/` / `claude-bridge/` / `antigravity/` ids, never POST `grog://`), **no x.ai/cli updater** (`grog --version`, skip grok update toast/changelog CDN) |
 | Product docs | `docs/grog.md`, this file |
 
 Thin patches should stay small so the next dump rebases. Prefer a new grog

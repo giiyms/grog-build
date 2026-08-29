@@ -7209,6 +7209,73 @@ fn resolve_model_list_merges_grog_native_catalog_without_overwriting() {
     assert_eq!(flash.base_url, "grog://antigravity");
     assert!(flash.user_selectable);
 }
+#[test]
+fn grog_native_catalog_has_own_creds_and_keeps_qualified_sampler_model() {
+    let resolved = resolve_model_list(&Config::default(), None);
+    for key in [
+        "codex/gpt-5.6-luna",
+        "claude-bridge/claude-opus-5",
+        "antigravity/gemini-3.7-flash-high",
+    ] {
+        let entry = resolved.get(key).unwrap_or_else(|| panic!("missing {key}"));
+        assert!(
+            entry.is_grog_native(),
+            "{key} must be marked grog-native via grog://"
+        );
+        assert!(
+            entry.child_has_own_creds(),
+            "{key} must not inherit the parent Grok cached_token"
+        );
+        assert!(
+            !entry.has_own_credentials(),
+            "{key} is not HTTP BYOK; Codex/Claude/agy creds are not config.toml keys"
+        );
+        let creds = resolve_credentials(entry, Some("parent-grok-session-token"));
+        assert!(
+            creds.api_key.is_none(),
+            "{key} must not attach the parent Grok token"
+        );
+        assert_eq!(creds.auth_type, xai_chat_state::AuthType::ApiKey);
+        assert!(grog_providers::is_native_base_url(&creds.base_url));
+        let config = sampling_config_for_model(entry, creds, None, None, None, None);
+        assert!(
+            grog_providers::consult::is_native_model(&config.model),
+            "{key} sampler model must stay qualified, got {}",
+            config.model
+        );
+        let route = grog_providers::inference_route(&config.model, &config.base_url);
+        assert!(
+            route.is_native(),
+            "{key} must select the native provider path"
+        );
+        assert_eq!(
+            route.sampler_chat_completions_url(&config.base_url),
+            None,
+            "{key} must not produce grog://…/chat/completions"
+        );
+        assert_ne!(
+            format!("{}/chat/completions", config.base_url.trim_end_matches('/')),
+            "https://api.x.ai/v1/chat/completions"
+        );
+    }
+    let luna = resolved.get("codex/gpt-5.6-luna").expect("luna");
+    let config = sampling_config_for_model(
+        luna,
+        resolve_credentials(luna, Some("parent-grok-session-token")),
+        None,
+        None,
+        None,
+        None,
+    );
+    assert_eq!(config.model, "codex/gpt-5.6-luna");
+    assert_eq!(config.base_url, "grog://codex");
+    assert!(config.api_key.is_none());
+    assert_eq!(
+        grog_providers::inference_route(&config.model, &config.base_url)
+            .sampler_chat_completions_url(&config.base_url),
+        None
+    );
+}
 /// Regression: enterprise managed config overlays env_key on an oauth-only
 /// catalog entry. BYOK must force visibility for API-key users so a
 /// base `supported_in_api: false` does not leak into the overlay.

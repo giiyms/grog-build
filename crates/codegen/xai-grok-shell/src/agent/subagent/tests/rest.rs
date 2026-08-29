@@ -2365,6 +2365,98 @@ fn resolve_model_override_to_config_no_resolver_for_byok_model() {
     assert!(config.bearer_resolver.is_none());
     assert_eq!(config.api_key.as_deref(), Some("sk-byok"));
 }
+/// Council / AskCodex children for `codex/gpt-5.6-luna` (and the same
+/// class of `claude-bridge/` / `antigravity/` ids) must not inherit the
+/// parent Grok cached_token or POST `grog://…/chat/completions`.
+#[test]
+fn resolve_model_override_routes_grog_native_council_seats_off_http() {
+    let parent_token = "parent-grok-session-token";
+    let resolved = crate::agent::config::resolve_model_list(
+        &crate::agent::config::Config::default(),
+        None,
+    );
+    for key in [
+        "codex/gpt-5.6-luna",
+        "claude-bridge/claude-opus-5",
+        "antigravity/gemini-3.7-flash-high",
+    ] {
+        let mut ctx = ctx_with_toggle(HashMap::new());
+        ctx.auth_method_id = acp::AuthMethodId::new(
+            crate::agent::auth_method::CACHED_TOKEN_AUTH_METHOD_ID,
+        );
+        ctx.auth = Some(crate::auth::GrokAuth {
+            key: parent_token.into(),
+            ..crate::auth::GrokAuth::test_default()
+        });
+        ctx.sampling_config.api_key = Some(parent_token.into());
+        ctx.sampling_config.model = "grok-4.5".into();
+        ctx.sampling_config.base_url = "https://cli-chat-proxy.grok.com/v1".into();
+        let entry = resolved
+            .get(key)
+            .unwrap_or_else(|| panic!("native catalog missing {key}"))
+            .clone();
+        assert!(
+            entry.child_has_own_creds(),
+            "{key}: model_has_own_creds must be true"
+        );
+        assert!(
+            !entry.has_own_credentials(),
+            "{key} is not HTTP BYOK"
+        );
+        ctx.available_models.insert(key.to_string(), entry);
+        let (config, model_id) = resolve_model_override_to_config(key, &ctx).unwrap();
+        assert_eq!(model_id.0.as_ref(), key);
+        assert!(
+            grog_providers::consult::is_native_model(&config.model),
+            "{key}: sampler model must be the qualified consult id, got {}",
+            config.model
+        );
+        let route = grog_providers::inference_route(&config.model, &config.base_url);
+        assert!(
+            route.is_native(),
+            "{key} must select the native provider path, not HTTP"
+        );
+        assert_eq!(
+            route.sampler_chat_completions_url(&config.base_url),
+            None,
+            "{key} must not produce a grog://…/chat/completions reqwest URL"
+        );
+        if key == "codex/gpt-5.6-luna" {
+            assert_eq!(config.base_url, "grog://codex");
+            assert_eq!(
+                format!("{}/chat/completions", config.base_url),
+                "grog://codex/chat/completions",
+                "catalog marker still uses grog://; routing must not POST it"
+            );
+        }
+        match &route {
+            grog_providers::InferenceRoute::Native { provider, qualified } => {
+                assert_eq!(qualified, key);
+                match *provider {
+                    grog_providers::ProviderId::Codex => {
+                        assert_eq!(key, "codex/gpt-5.6-luna");
+                    }
+                    grog_providers::ProviderId::ClaudeBridge => {
+                        assert_eq!(key, "claude-bridge/claude-opus-5");
+                    }
+                    grog_providers::ProviderId::Antigravity => {
+                        assert_eq!(key, "antigravity/gemini-3.7-flash-high");
+                    }
+                    grog_providers::ProviderId::Http => panic!("{key} must not be HTTP"),
+                }
+            }
+            grog_providers::InferenceRoute::Http => panic!("{key} routed to HTTP"),
+        }
+        assert!(
+            config.api_key.is_none(),
+            "{key} must not attach the parent Grok token"
+        );
+        assert!(
+            config.bearer_resolver.is_none(),
+            "{key} must not wire the parent session bearer resolver"
+        );
+    }
+}
 #[tokio::test]
 async fn read_parent_sampling_config_resolves_backend_search_from_catalog() {
     let mut entry = test_model_entry("grok-4.5");

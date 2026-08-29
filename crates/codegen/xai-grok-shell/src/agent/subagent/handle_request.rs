@@ -704,7 +704,7 @@ pub(crate) async fn run_shell_child(
         &ctx.available_models,
         effective_model_id.0.as_ref(),
     );
-    let model_has_own_creds = model_entry.is_some_and(|entry| entry.has_own_credentials());
+    let model_has_own_creds = model_entry.is_some_and(|entry| entry.child_has_own_creds());
     let inherited_auth_type = subagent_auth_type(model_entry, &ctx.auth_method_id);
     let credentials = xai_chat_state::Credentials {
         api_key: effective_sampling_config.api_key.clone(),

@@ -179,10 +179,14 @@ mod tests {
         let err = ask("grok-4", "hello").await.unwrap_err();
         assert!(matches!(err, ConsultError::HttpPassthrough));
         assert!(!is_native_model("grok-4"));
+        assert!(!is_native_model("gpt-5.6-luna"));
+        assert!(is_native_model("codex/gpt-5.6-luna"));
         assert!(is_native_model("claude-bridge/claude-opus-5"));
         assert!(is_native_model("claude-opus-5"));
         assert!(is_native_model("claude-bridge/claude-opus-4-6"));
         assert!(is_native_model("claude-opus-4-6"));
+        assert!(is_native_model("antigravity/gemini-3.7-flash-high"));
+        assert!(is_native_model("gemini-3.7-flash-high"));
     }
 
     #[tokio::test]

@@ -1185,11 +1185,23 @@ impl SessionActor {
             *self.turn_stream_drained.lock() = Some(tx);
             (DrainBarrier(&self.turn_stream_drained), rx)
         };
-        if let Some(model) = request.model.as_deref()
-            && grog_providers::consult::is_native_model(model)
-        {
-            crate::tools::grog_ask::set_session_model(request.model.clone());
+        let mut request = request;
+        if let Some(consult_id) = grog_native_consult_id(request.model.as_deref(), None) {
+            request.model = Some(consult_id.clone());
+            crate::tools::grog_ask::set_session_model(Some(consult_id));
             return grog_native_turn(request).await;
+        }
+        // Slug-only native catalog ids (e.g. `gpt-5.6-luna`) look like HTTP
+        // until paired with the `grog://` marker on the session config.
+        if request.model.as_deref().is_some_and(native_catalog_slug) {
+            let cfg = self.reconstruct_full_config().await;
+            if let Some(consult_id) =
+                grog_native_consult_id(request.model.as_deref(), Some(cfg.base_url.as_str()))
+            {
+                request.model = Some(consult_id.clone());
+                crate::tools::grog_ask::set_session_model(Some(consult_id));
+                return grog_native_turn(request).await;
+            }
         }
         let request_id = xai_grok_sampler::RequestId::random();
         let request_id_str = request_id.as_str().to_string();
@@ -1580,6 +1592,24 @@ fn flatten_conversation_prompt(request: &ConversationRequest) -> String {
         .filter(|text| !text.is_empty())
         .collect::<Vec<_>>()
         .join("\n\n")
+}
+
+/// Qualified consult id for a native grog seat, or `None` for HTTP sampler.
+///
+/// `codex/gpt-5.6-luna` is native from the id alone. The council spawn bug
+/// stored only `gpt-5.6-luna` plus `grog://codex`; that pair is also native.
+fn grog_native_consult_id(
+    request_model: Option<&str>,
+    sampler_base_url: Option<&str>,
+) -> Option<String> {
+    grog_providers::consult_model_id(request_model.unwrap_or(""), sampler_base_url)
+        .filter(|id| grog_providers::consult::is_native_model(id))
+}
+
+fn native_catalog_slug(model: &str) -> bool {
+    grog_providers::builtin_catalog()
+        .iter()
+        .any(|entry| entry.id == model)
 }
 
 fn grog_sampling_error(message: String) -> xai_grok_sampler::SamplingErrorInfo {

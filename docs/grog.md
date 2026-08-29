@@ -282,6 +282,30 @@ and an **Ask\*** tool (another model consults them). Grog needs both.
 
 Council workflows use the Ask\* tools and/or `agent(..., #{ model })`.
 
+### Native routing (not HTTP)
+
+Catalog entries for `codex/…`, `claude-bridge/…`, and `antigravity/…` use a
+`grog://<provider>` **marker**, not an inference origin. Reqwest cannot POST
+that scheme (`grog://codex/chat/completions` is the spawn-death the council
+hit when a child kept only the slug `gpt-5.6-luna`).
+
+Routing:
+
+1. Keep the **qualified** catalog id on the child `SamplerConfig.model`
+   (`codex/gpt-5.6-luna`, not `gpt-5.6-luna`).
+2. The sampler intercept matches that id **or** `grog://` + a native catalog
+   slug and calls `grog-providers::consult` (grog-codex ChatGPT backend,
+   `claude`, or `agy`).
+3. The child does **not** inherit the parent Grok `cached_token`. Codex
+   uses `~/.grog/auth/codex.json` (or imported `~/.codex/auth.json`).
+   Claude/agy use those CLIs' own logins.
+4. Originator header on Codex remains `grog` (do not impersonate
+   `codex_cli_rs`). Do not put vendor tokens in `config.toml`.
+
+How to tell it is fixed: a Codex council seat **starts**, spawn log has
+`model_has_own_creds: true` / no parent grok token, and there is **no**
+`reqwest` builder error for `grog://codex/chat/completions`.
+
 ## What we learned from the pi packages (and will not wrap)
 
 Those packages are the spec. Grog reimplements the **behavior** in Rust.
@@ -449,6 +473,7 @@ grog -p --workflow council "..."
 | Need | Today | Change |
 | --- | --- | --- |
 | Mixed models in one workflow | Landed — native ids go through grog-providers | |
+| Native vs HTTP routing | Landed — `codex/` / `claude-bridge/` / `antigravity/` children keep the qualified id and `grog://` marker; the sampler intercept sends them to grog-codex / CLI bridges. The HTTP sampler never POSTs `grog://codex/chat/completions`. | |
 | Parallelism | Rhai `parallel` + host spawn | Optional later: cap by `council.max_parallel` |
 | Subagent depth | Children cannot spawn children | Keep it. Council members are workflow agents, not nested subagents |
 | Cross-member context | Landed — Stage 2 is anonymized Response A/B/C; chair sees names | |
