@@ -512,6 +512,33 @@ Work in this order so each slice is usable alone:
 The model picker (`Ctrl+M`) groups by provider. Unavailable providers stay
 visible but disabled, with the doctor reason.
 
+### `/restart` and the exit resume hint
+
+`/restart` quits grog and immediately reopens **this** session: same binary
+(the running process, never `~/.grok/bin/grok`), same cwd, same
+conversation via the existing `--resume <session-id>` path (the log under
+`$GROG_HOME` / `~/.grog`, not a second store). After reopen you are back in
+the same scrollback and workspace; the session's saved model is restored.
+
+If an agent turn is in flight, `/restart` **cancels it** (same as Esc) so
+tool children are reaped before the TTY is handed to the new process. It
+does not wait for the model to finish. Resume is from the last flushed
+checkpoint (`updates.jsonl`). Teardown still `kill_all`s so nothing fights
+the TTY.
+
+On a normal `/exit`, grog prints a resume hint you can type — **not** a
+UUID, **not** `grok`:
+
+```text
+Resume this session with:
+  grog --continue
+```
+
+`--continue` (and `grog --resume last`, or bare `grog --resume`) is the
+existing “most recent session in this directory” path — the session you
+just left. `/restart` uses that same resume machinery internally with the
+exact session id so a newer session in the same cwd cannot steal reopen.
+
 ## Risks
 
 - **Do not wrap the npm packages.** They target pi's TypeScript

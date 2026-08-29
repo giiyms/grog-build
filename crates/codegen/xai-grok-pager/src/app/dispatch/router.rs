@@ -109,7 +109,7 @@ use super::transcript::{
 };
 use super::turn::{
     dispatch_cancel_scheduled_task, dispatch_cancel_turn, dispatch_cancel_turn_choice,
-    dispatch_demote_to_background, dispatch_kill_bg_task, dispatch_kill_subagent,
+    dispatch_demote_to_background, dispatch_kill_bg_task, dispatch_kill_subagent, do_cancel_turn,
 };
 use super::voice::{dispatch_enable_voice_mode, dispatch_voice_stop, dispatch_voice_toggle};
 use crate::app::actions::{Action, Effect};
@@ -192,11 +192,34 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
             }
             if let Some(session_id) = app.active_session_id().map(str::to_owned) {
                 app.relaunch = Some(crate::app::app_view::ScreenModeRelaunch {
-                    minimal,
                     session_id,
+                    mode: if minimal {
+                        crate::app::ScreenMode::Minimal
+                    } else {
+                        crate::app::ScreenMode::Fullscreen
+                    },
+                    restart: false,
                 });
             }
             let mut effects = unregister_all_active_sessions(app);
+            effects.push(Effect::Quit);
+            effects
+        }
+        Action::RestartProcess => {
+            let Some(session_id) = app.active_session_id().map(str::to_owned) else {
+                app.show_toast("No active session to restart");
+                return vec![];
+            };
+            app.relaunch = Some(crate::app::app_view::ScreenModeRelaunch {
+                session_id,
+                mode: app.screen_mode,
+                restart: true,
+            });
+            // Cancel an in-flight turn (if any) so tool children are asked to
+            // stop before TTY restore. Teardown still `kill_all`s; we do
+            // not wait for the model. Resume is the last flushed checkpoint.
+            let mut effects = do_cancel_turn(app, true);
+            effects.extend(unregister_all_active_sessions(app));
             effects.push(Effect::Quit);
             effects
         }

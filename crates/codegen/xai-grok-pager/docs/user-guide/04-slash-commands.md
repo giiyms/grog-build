@@ -70,7 +70,16 @@ Export the conversation to a file or the clipboard.
 
 ### `/quit`
 
-Quit the application. Alias: `/exit`.
+Quit the application. Alias: `/exit`. After the TUI restores your
+terminal, grog prints `grog --continue` (or `grog --minimal --continue`)
+so you can reopen the session you just left — the most recent session in
+this directory. The hint never says `grok` and never prints a session UUID.
+
+### `/restart`
+
+Quit grog and immediately reopen this session in place. Same binary, same
+cwd, same conversation (existing `--resume` path). An in-flight turn is
+cancelled first so tool children do not keep the TTY.
 
 ### `/home`
 

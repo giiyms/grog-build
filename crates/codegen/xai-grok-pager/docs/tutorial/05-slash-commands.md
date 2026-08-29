@@ -8,6 +8,7 @@ A few worth knowing on day one:
 | `/help` | Browse every command and keyboard shortcut |
 | `/model` | Switch models or reasoning effort |
 | `/resume` | Pick up a previous session where you left off |
+| `/restart` | Quit grog and immediately reopen this session |
 | `/new` | Start a fresh session |
 | `/compact` | Compress a long conversation to free up context |
 | `/btw` | Send Grok an aside *without* interrupting its current task |

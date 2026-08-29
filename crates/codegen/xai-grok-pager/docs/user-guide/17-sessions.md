@@ -58,13 +58,23 @@ This clears the current context and begins a new conversation. Alias: `/clear`.
 
 ### Exit
 
-End the session and quit Grok:
+End the session and quit grog:
 
 ```
 /quit
 ```
 
-Alias: `/exit`. To leave the current session but stay in Grok, use `/home` to return to the welcome screen.
+Alias: `/exit`. After quit, grog prints `grog --continue` so you can
+reopen the session you just left (most recent in this directory). To leave
+the current session but stay in grog, use `/home` to return to the welcome
+screen. `/restart` quits and immediately reopens this same session.
+
+To restart grog onto the current conversation without typing a resume
+command:
+
+```
+/restart
+```
 
 ### Delete the current session
 
@@ -97,12 +107,12 @@ For the live top-level sessions in this pager (parent and forks) — switch, ren
 Resume a specific session by ID or title:
 
 ```bash
-grok --resume <session-id-or-title>
+grog --resume <session-id-or-title>
 ```
 
 A value that is not a session ID is matched against session titles for the current directory, ignoring letter case (a simple lowercase comparison) — handy after `/rename`. If several sessions share the title, a single manually renamed session wins over auto-generated duplicates; otherwise the command errors and lists the matching IDs. UUID-shaped values are always treated as session IDs, never titles. Scripts should prefer IDs.
 
-Run `grok --resume` without a value to resume the most recent session for the current directory.
+Run `grog --continue`, `grog --resume last`, or `grog --resume` without a value to resume the most recent session for the current directory (what `/exit` prints).
 
 ### From the Welcome Screen
 

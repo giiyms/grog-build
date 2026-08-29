@@ -595,13 +595,16 @@ fn is_restricted_tier(tier: Option<&str>) -> bool {
 pub(crate) fn is_api_key_label(s: &str) -> bool {
     s.trim().to_ascii_lowercase().replace([' ', '_', '-'], "") == "apikey"
 }
-/// Pending re-exec into another screen mode (see `/minimal` / `/fullscreen`).
+/// Pending re-exec onto a session (see `/minimal` / `/fullscreen` / `/restart`).
 #[derive(Debug, Clone)]
 pub struct ScreenModeRelaunch {
-    /// `true` → `--minimal`; `false` → fullscreen (non-minimal).
-    pub minimal: bool,
     /// Active session to reopen via `--resume`.
     pub session_id: String,
+    /// Screen mode to restore after exec. Inline keeps argv as-is (no
+    /// `--minimal` / `--fullscreen` injection).
+    pub(crate) mode: ScreenMode,
+    /// `/restart` (same mode, "Restarting grog…") vs a screen-mode switch.
+    pub(crate) restart: bool,
 }
 /// A consented `/feedback` trace upload deferred until the coding-data
 /// sharing opt-in write claimed at `seq` resolves.

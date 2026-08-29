@@ -48,6 +48,8 @@ pub enum Action {
     RelaunchInScreenMode {
         minimal: bool,
     },
+    /// Quit and re-exec this grog binary onto the active session.
+    RestartProcess,
     /// Quit without double-press confirmation (e.g., from command palette or pre-login screens).
     QuitConfirmed,
     /// Create a new session from the welcome screen.
@@ -1196,7 +1198,11 @@ impl PlanModeKind {
     }
     /// Construct from a bool (the inverse of [`Self::to_bool`]).
     pub fn from_bool(b: bool) -> Self {
-        if b { Self::On } else { Self::Off }
+        if b {
+            Self::On
+        } else {
+            Self::Off
+        }
     }
 }
 /// What user gesture triggered a turn cancel; sent as `session/cancel`'s

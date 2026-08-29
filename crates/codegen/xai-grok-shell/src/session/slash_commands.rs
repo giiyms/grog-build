@@ -542,6 +542,7 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "reload-plugins",
     "remember",
     "rename",
+    "restart",
     "resume",
     "rewind",
     "scroll-debug",
