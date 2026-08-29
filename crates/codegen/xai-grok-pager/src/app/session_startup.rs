@@ -1482,6 +1482,18 @@ mod tests {
         );
     }
     #[test]
+    fn intent_resume_last_is_most_recent() {
+        assert_eq!(
+            parse(&["grok", "--resume", "last"])
+                .session_startup_intent()
+                .unwrap(),
+            SessionStartupIntent::Resume {
+                session_id: None,
+                most_recent_for_cwd: true,
+            }
+        );
+    }
+    #[test]
     fn intent_continue() {
         assert_eq!(
             parse(&["grok", "-c"]).session_startup_intent().unwrap(),

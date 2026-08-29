@@ -563,6 +563,7 @@ pub struct PagerArgs {
     )]
     pub system_prompt_override: Option<String>,
     /// Resume a session by ID or title, or the most recent if omitted.
+    /// `last` is an alias for most recent in this directory (same as `--continue`).
     /// Non-ID values match session titles for the current directory
     /// (ignoring letter case; a sole renamed match wins among duplicates,
     /// otherwise ambiguity errors; UUID-shaped values always mean IDs).
@@ -844,6 +845,37 @@ fn strip_cur_dir(path: PathBuf) -> PathBuf {
         .filter(|component| !matches!(component, std::path::Component::CurDir))
         .collect()
 }
+
+/// `--resume` tokens that mean "most recent session in this directory"
+/// (empty sentinel from `--resume` with no value, or the `last` alias).
+pub(crate) fn is_resume_most_recent_token(s: &str) -> bool {
+    s.is_empty() || s.eq_ignore_ascii_case("last")
+}
+
+/// User-facing CLI name for resume hints and `/restart` copy.
+///
+/// argv0 basename when it is `grog` or `agent`; otherwise `grog`.
+/// Never `grok` — even if this process was invoked as `grok`.
+pub(crate) fn pager_cli_name() -> String {
+    pager_cli_name_from(
+        std::env::args_os()
+            .next()
+            .as_deref()
+            .map(std::path::Path::new),
+    )
+}
+
+pub(crate) fn pager_cli_name_from(argv0: Option<&std::path::Path>) -> String {
+    let name = argv0
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
+        .unwrap_or("grog");
+    match name {
+        "grog" | "agent" => name.to_owned(),
+        _ => "grog".to_owned(),
+    }
+}
+
 impl PagerArgs {
     pub(crate) fn memory_enabled_override(&self) -> Option<bool> {
         if self.experimental_memory {
@@ -919,16 +951,20 @@ impl PagerArgs {
     /// Get the session ID to resume, from either --resume or --load (hidden alias).
     ///
     /// Returns `None` when `--resume` was used without a value (the empty-string
-    /// sentinel). Use [`resume_most_recent`] to detect that case.
+    /// sentinel) or with `last` (most-recent alias). Use [`resume_most_recent`]
+    /// to detect that case.
     pub fn session_to_resume(&self) -> Option<&str> {
         self.resume_session
             .as_deref()
             .or(self.load_session.as_deref())
-            .filter(|s| !s.is_empty())
+            .filter(|s| !is_resume_most_recent_token(s))
     }
-    /// Whether `--resume` was used without a session ID (meaning "resume most recent").
+    /// Whether `--resume` was used without a session ID (meaning "resume most
+    /// recent") or with the `last` alias.
     pub fn resume_most_recent(&self) -> bool {
-        self.resume_session.as_deref() == Some("")
+        self.resume_session
+            .as_deref()
+            .is_some_and(is_resume_most_recent_token)
     }
     /// Classify flags for sandbox profile lookup on an existing session.
     ///

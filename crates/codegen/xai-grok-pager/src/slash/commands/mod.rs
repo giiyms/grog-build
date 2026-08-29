@@ -52,6 +52,7 @@ pub mod release_notes;
 pub mod remember;
 pub mod rename;
 pub mod resume;
+pub mod restart;
 pub mod rewind;
 pub mod screen_mode_switch;
 pub mod scroll_debug;
@@ -94,6 +95,7 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(compact::CompactCommand),
         Arc::new(fork::ForkCommand),
         Arc::new(resume::ResumeCommand),
+        Arc::new(restart::RestartCommand),
         // Steering the work in front of you.
         Arc::new(loop_cmd::LoopCommand),
         Arc::new(plan::PlanCommand),
@@ -286,6 +288,35 @@ mod tests {
         let cmd = exit::ExitCommand;
         let result = cmd.run(&mut ctx, "");
         assert!(matches!(result, CommandResult::Action(Action::Quit)));
+    }
+    #[test]
+    fn restart_is_registered_and_names_grog() {
+        let reg = CommandRegistry::new(builtin_commands());
+        let cmd = reg.get("restart").expect("/restart must be registered");
+        assert_eq!(cmd.name(), "restart");
+        assert!(
+            cmd.description().contains("grog"),
+            "/restart help must name grog, got {}",
+            cmd.description()
+        );
+        assert!(
+            !cmd.description().to_ascii_lowercase().contains("grok"),
+            "/restart help must not say grok, got {}",
+            cmd.description()
+        );
+    }
+    #[test]
+    fn restart_returns_restart_action_with_session() {
+        let models = ModelState::default();
+        let mut ctx = make_ctx(&models);
+        let cmd = restart::RestartCommand;
+        assert!(matches!(cmd.run(&mut ctx, ""), CommandResult::Error(_)));
+        let session_id = acp::SessionId::new("sess-restart");
+        ctx.session_id = Some(&session_id);
+        assert!(matches!(
+            cmd.run(&mut ctx, ""),
+            CommandResult::Action(Action::RestartProcess)
+        ));
     }
     #[test]
     fn new_returns_new_session_action() {

@@ -1114,6 +1114,38 @@ fn slash_quit_alias_dispatches_quit() {
     assert!(effects.last().is_some_and(|e| matches!(e, Effect::Quit)));
 }
 #[test]
+fn slash_restart_dispatches_relaunch_with_session_id() {
+    let mut app = test_app_with_agent();
+    let effects = dispatch(Action::SendPrompt("/restart".into()), &mut app);
+    assert!(
+        effects.last().is_some_and(|e| matches!(e, Effect::Quit)),
+        "expected Quit as last effect, got: {effects:?}"
+    );
+    let relaunch = app.relaunch.expect("/restart must arm session relaunch");
+    assert_eq!(relaunch.session_id, "test-session");
+    assert!(relaunch.restart);
+    assert!(
+        !effects
+            .iter()
+            .any(|e| matches!(e, Effect::CancelTurn { .. }))
+    );
+}
+#[test]
+fn slash_restart_cancels_in_flight_turn() {
+    let mut app = test_app_with_agent();
+    let id = AgentId(0);
+    app.agents.get_mut(&id).unwrap().session.state = AgentState::TurnRunning;
+    let effects = dispatch(Action::SendPrompt("/restart".into()), &mut app);
+    assert!(
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::CancelTurn { .. })),
+        "in-flight turn must be cancelled before relaunch, got: {effects:?}"
+    );
+    assert!(effects.last().is_some_and(|e| matches!(e, Effect::Quit)));
+    assert!(app.relaunch.as_ref().is_some_and(|r| r.restart));
+}
+#[test]
 fn slash_new_does_not_cancel_running_turn() {
     let mut app = test_app_with_agent();
     let id = AgentId(0);

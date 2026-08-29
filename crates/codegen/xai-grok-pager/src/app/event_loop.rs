@@ -1005,8 +1005,9 @@ fn run_pending_mode_switch(
             tracing::error!(%reason, "screen-mode switch failed; falling back to exec relaunch");
             if let Some(session_id) = app.active_session_id().map(str::to_owned) {
                 app.relaunch = Some(crate::app::app_view::ScreenModeRelaunch {
-                    minimal: target.is_minimal(),
                     session_id,
+                    mode: target,
+                    restart: false,
                 });
             }
             let effs: Vec<super::actions::Effect> = app

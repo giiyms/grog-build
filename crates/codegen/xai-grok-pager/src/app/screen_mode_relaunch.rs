@@ -16,6 +16,7 @@
 use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
 use std::io::{self, Write};
+use std::path::PathBuf;
 use std::sync::OnceLock;
 
 /// Env var that forces screen-mode resolution regardless of CLI flag / config.
@@ -70,12 +71,11 @@ fn flag_takes_value(flag: &str) -> bool {
     value_taking_flag_tokens().contains(flag)
 }
 
-/// Rebuild argv (without the binary name) for reopening `session_id` in the
-/// requested screen mode.
+/// Rebuild argv (without the binary name) for reopening `session_id`.
 ///
 /// Strips prior session-selection / mode flags, one-shot session-creation
 /// directives, and any bare positional prompt so a cold-start
-/// `grok "do the thing"` does not re-submit on resume. Keeps everything else
+/// `grog "do the thing"` does not re-submit on resume. Keeps everything else
 /// (e.g. `--no-leader`, `--model`, endpoint overrides) intact, including the
 /// value token that follows value-taking flags.
 ///
@@ -86,10 +86,10 @@ fn flag_takes_value(flag: &str) -> bool {
 /// `--worktree-ref` would create a *second* worktree on relaunch; a kept
 /// `--restore-code` would re-checkout the original session commit. All of
 /// them already did their job in the process being replaced.
-pub(crate) fn build_screen_mode_relaunch_args(
+pub(crate) fn build_session_relaunch_args(
     current_args: impl IntoIterator<Item = impl AsRef<OsStr>>,
     session_id: &str,
-    want_minimal: bool,
+    mode: super::ScreenMode,
 ) -> Vec<OsString> {
     let mut iter = current_args
         .into_iter()
@@ -189,12 +189,30 @@ pub(crate) fn build_screen_mode_relaunch_args(
     out.push(OsString::from("--resume"));
     out.push(OsString::from(session_id));
     // Keep a CLI mode flag for hand-pasted resume hints that omit GROK_SCREEN_MODE.
-    if want_minimal {
-        out.push(OsString::from("--minimal"));
-    } else {
-        out.push(OsString::from("--fullscreen"));
+    // Inline (`--no-alt-screen` / auto-inline) must not be forced to fullscreen.
+    match mode {
+        super::ScreenMode::Minimal => out.push(OsString::from("--minimal")),
+        super::ScreenMode::Fullscreen => out.push(OsString::from("--fullscreen")),
+        super::ScreenMode::Inline => {}
     }
     out
+}
+
+/// Screen-mode switch argv (always injects `--minimal` or `--fullscreen`).
+pub(crate) fn build_screen_mode_relaunch_args(
+    current_args: impl IntoIterator<Item = impl AsRef<OsStr>>,
+    session_id: &str,
+    want_minimal: bool,
+) -> Vec<OsString> {
+    build_session_relaunch_args(
+        current_args,
+        session_id,
+        if want_minimal {
+            super::ScreenMode::Minimal
+        } else {
+            super::ScreenMode::Fullscreen
+        },
+    )
 }
 
 /// `GROK_SCREEN_MODE_SWITCH=exec` forces the legacy re-exec switch.
@@ -213,15 +231,58 @@ pub(crate) fn screen_mode_env_value(want_minimal: bool) -> &'static str {
     }
 }
 
-/// Pasteable shell command when auto re-exec fails (env + flag + `--resume`).
-pub(crate) fn screen_mode_relaunch_resume_hint(session_id: &str, want_minimal: bool) -> String {
-    let mode = screen_mode_env_value(want_minimal);
+/// Pasteable shell command when auto re-exec fails (`grog --continue`, never
+/// a session UUID). Screen-mode switches keep an explicit mode flag.
+pub(crate) fn screen_mode_relaunch_resume_hint(_session_id: &str, want_minimal: bool) -> String {
+    let bin = super::cli::pager_cli_name();
     let flag = if want_minimal {
         "--minimal"
     } else {
         "--fullscreen"
     };
-    format!("{GROK_SCREEN_MODE_ENV}={mode} grok {flag} --resume {session_id}")
+    format!("{bin} {flag} --continue")
+}
+
+/// User-facing resume command after `/exit`: most recent session in this cwd.
+///
+/// `--continue` (and `--resume last`) already resolve through the existing
+/// session store. Never prints a UUID or `grok`.
+pub(crate) fn user_resume_command(minimal: bool) -> String {
+    let bin = super::cli::pager_cli_name();
+    if minimal {
+        format!("{bin} --minimal --continue")
+    } else {
+        format!("{bin} --continue")
+    }
+}
+
+/// Path of the grog binary this process is running.
+///
+/// Prefers an absolute argv0 when it exists on disk so a user-built `grog`
+/// stays that path. Falls back to `current_exe()`. Never substitutes a
+/// hardcoded xAI install (`~/.grok/bin/grok`).
+pub(crate) fn current_pager_exe() -> io::Result<PathBuf> {
+    if let Some(argv0) = std::env::args_os().next() {
+        let p = PathBuf::from(&argv0);
+        if p.is_absolute() && p.exists() {
+            return Ok(p);
+        }
+        if p.is_file() {
+            return std::env::current_dir().map(|cwd| cwd.join(p));
+        }
+    }
+    std::env::current_exe()
+}
+
+/// Argv plan for `/restart` / screen-mode exec: this process's binary plus
+/// rebuilt flags that `--resume` the given session.
+pub(crate) fn pager_relaunch_plan(
+    session_id: &str,
+    mode: super::ScreenMode,
+) -> io::Result<(PathBuf, Vec<OsString>)> {
+    let exe = current_pager_exe()?;
+    let args = build_session_relaunch_args(std::env::args_os(), session_id, mode);
+    Ok((exe, args))
 }
 
 /// Replace the current process with a relaunch into the requested screen mode.
@@ -231,21 +292,48 @@ pub(crate) fn screen_mode_relaunch_resume_hint(session_id: &str, want_minimal: b
 /// exiting with its code. On failure it returns the IO error so the caller can
 /// fall back to a resume hint.
 pub(crate) fn exec_screen_mode_relaunch(session_id: &str, want_minimal: bool) -> io::Result<()> {
-    let exe = std::env::current_exe()?;
-    let args = build_screen_mode_relaunch_args(std::env::args_os(), session_id, want_minimal);
+    exec_pager_relaunch(
+        session_id,
+        if want_minimal {
+            super::ScreenMode::Minimal
+        } else {
+            super::ScreenMode::Fullscreen
+        },
+        false,
+    )
+}
+
+/// Replace this process with the same grog binary, resuming `session_id`.
+pub(crate) fn exec_pager_relaunch(
+    session_id: &str,
+    mode: super::ScreenMode,
+    restart: bool,
+) -> io::Result<()> {
+    let (exe, args) = pager_relaunch_plan(session_id, mode)?;
 
     let mut cmd = std::process::Command::new(&exe);
     cmd.args(&args);
-    // Force mode resolution even when config.toml has the opposite preference.
-    cmd.env(GROK_SCREEN_MODE_ENV, screen_mode_env_value(want_minimal));
+    match mode {
+        super::ScreenMode::Minimal => {
+            cmd.env(GROK_SCREEN_MODE_ENV, "minimal");
+        }
+        super::ScreenMode::Fullscreen => {
+            cmd.env(GROK_SCREEN_MODE_ENV, "fullscreen");
+        }
+        super::ScreenMode::Inline => {}
+    }
 
-    let mode_label = screen_mode_env_value(want_minimal);
-    let reverse = if want_minimal {
-        "/fullscreen"
+    if restart {
+        eprintln!("Restarting {}…", super::cli::pager_cli_name());
     } else {
-        "/minimal"
-    };
-    eprintln!("Reopening session in {mode_label} mode… (switch back with {reverse})");
+        let mode_label = screen_mode_env_value(mode.is_minimal());
+        let reverse = if mode.is_minimal() {
+            "/fullscreen"
+        } else {
+            "/minimal"
+        };
+        eprintln!("Reopening session in {mode_label} mode… (switch back with {reverse})");
+    }
     let _ = io::stdout().flush();
     let _ = io::stderr().flush();
 
@@ -305,7 +393,7 @@ pub(crate) fn exec_screen_mode_relaunch(session_id: &str, want_minimal: bool) ->
     #[cfg(not(any(unix, windows)))]
     {
         Err(io::Error::other(
-            "screen-mode relaunch unsupported on this platform",
+            "pager relaunch unsupported on this platform",
         ))
     }
 }
@@ -839,18 +927,100 @@ mod tests {
     }
 
     #[test]
-    fn failed_relaunch_hint_includes_screen_mode_env() {
-        // Recovery command must carry GROK_SCREEN_MODE so following the
-        // hint after a failed `/fullscreen` does not reopen minimal/inline. The
-        // explicit flag keeps the resume in the right mode if the env is dropped.
+    fn failed_relaunch_hint_uses_grog_continue_not_uuid() {
+        // Recovery command must be something the user can type: grog, not grok,
+        // and `--continue` rather than a session hash.
         assert_eq!(
             screen_mode_relaunch_resume_hint("abc-sid", false),
-            "GROK_SCREEN_MODE=fullscreen grok --fullscreen --resume abc-sid"
+            "grog --fullscreen --continue"
         );
         assert_eq!(
             screen_mode_relaunch_resume_hint("abc-sid", true),
-            "GROK_SCREEN_MODE=minimal grok --minimal --resume abc-sid"
+            "grog --minimal --continue"
         );
+        assert!(!screen_mode_relaunch_resume_hint("abc-sid", false).contains("grok"));
+        assert!(!screen_mode_relaunch_resume_hint("abc-sid", false).contains("abc-sid"));
+    }
+
+    #[test]
+    fn user_resume_command_is_grog_continue() {
+        assert_eq!(user_resume_command(false), "grog --continue");
+        assert_eq!(user_resume_command(true), "grog --minimal --continue");
+        assert!(!user_resume_command(false).contains("grok"));
+    }
+
+    #[test]
+    fn restart_args_pass_session_id_via_resume_not_continue() {
+        // /restart internally binds THAT session via --resume <id> so a
+        // newer session in the same cwd cannot steal reopen. The user never
+        // types this argv (exit hint is --continue).
+        let out = build_session_relaunch_args(
+            args(&["grog", "--no-leader", "fix the bug"]),
+            "sess-deadbeef",
+            super::super::ScreenMode::Fullscreen,
+        );
+        assert_eq!(
+            as_strs(&out),
+            vec!["--no-leader", "--resume", "sess-deadbeef", "--fullscreen"]
+        );
+        assert!(!as_strs(&out).iter().any(|s| s.contains("fix")));
+    }
+
+    #[test]
+    fn restart_args_preserve_inline_without_forcing_fullscreen() {
+        let out = build_session_relaunch_args(
+            args(&["grog", "--no-alt-screen", "--no-leader"]),
+            "sid",
+            super::super::ScreenMode::Inline,
+        );
+        let strs = as_strs(&out);
+        assert_eq!(
+            strs,
+            vec!["--no-alt-screen", "--no-leader", "--resume", "sid"]
+        );
+        assert!(!strs.iter().any(|s| s == "--fullscreen" || s == "--minimal"));
+    }
+
+    #[test]
+    fn relaunch_plan_uses_this_process_not_xai_grok_install() {
+        let (exe, args) =
+            pager_relaunch_plan("sid-1", super::super::ScreenMode::Fullscreen).expect("plan");
+        let hardcoded = PathBuf::from(std::env::var_os("HOME").unwrap_or_default())
+            .join(".grok")
+            .join("bin")
+            .join("grok");
+        assert_ne!(
+            exe, hardcoded,
+            "must not hardcode ~/.grok/bin/grok, got {exe:?}"
+        );
+        let current = std::env::current_exe().unwrap();
+        let argv0 = std::env::args_os().next().map(PathBuf::from);
+        assert!(
+            exe == current || argv0.as_ref() == Some(&exe),
+            "relaunch exe {exe:?} must be current_exe {current:?} or argv0 {argv0:?}"
+        );
+        let strs = as_strs(&args);
+        assert!(
+            strs.windows(2).any(|w| w == ["--resume", "sid-1"]),
+            "session id must be passed to --resume, got {strs:?}"
+        );
+    }
+
+    #[test]
+    fn pager_cli_name_never_returns_grok() {
+        use super::super::cli::pager_cli_name_from;
+        use std::path::Path;
+        assert_eq!(
+            pager_cli_name_from(Some(Path::new("/usr/local/bin/grog"))),
+            "grog"
+        );
+        assert_eq!(
+            pager_cli_name_from(Some(Path::new("/home/x/.grok/bin/grok"))),
+            "grog"
+        );
+        assert_eq!(pager_cli_name_from(Some(Path::new("grok"))), "grog");
+        assert_eq!(pager_cli_name_from(Some(Path::new("agent"))), "agent");
+        assert_eq!(pager_cli_name_from(None), "grog");
     }
 
     // ── effective_minimal_preference ─────────────────────────────────────
