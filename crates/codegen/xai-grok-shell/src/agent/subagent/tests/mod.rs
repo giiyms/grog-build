@@ -1677,7 +1677,15 @@ fn subagent_auth_type_rule() {
         );
     assert_eq!(
             super::subagent_auth_type(Some(&plain), &api_key),
-            AuthType::ApiKey
+            AuthType::ApiKey,
+        );
+    let mut native = test_model_entry("gpt-5.6-luna");
+    native.info.id = Some("codex/gpt-5.6-luna".into());
+    native.info.base_url = "grog://codex".into();
+    assert_eq!(
+            super::subagent_auth_type(Some(&native), &session),
+            AuthType::ApiKey,
+            "native grog seats must not inherit SessionToken / cached_token"
         );
     assert_eq!(
             super::subagent_auth_type(None, &session),

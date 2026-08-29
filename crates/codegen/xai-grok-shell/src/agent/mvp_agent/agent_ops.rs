@@ -2039,7 +2039,7 @@ impl MvpAgent {
             model,
             session.as_ref().map(|a| a.key.as_str()),
         );
-        if prefers_oidc && !model.has_own_credentials()
+        if prefers_oidc && !model.child_has_own_creds()
             && credentials.auth_type == xai_chat_state::AuthType::ApiKey
         {
             credentials.api_key = None;
@@ -2051,7 +2051,7 @@ impl MvpAgent {
             session.as_ref().map(|a| a.key.as_str()),
         );
         if !has_session_key && credentials.auth_type == xai_chat_state::AuthType::ApiKey
-            && !model.has_own_credentials() && is_session_based_auth
+            && !model.child_has_own_creds() && is_session_based_auth
         {
             tracing::info!(
                 model = model.info().model.as_str(),
@@ -2066,7 +2066,7 @@ impl MvpAgent {
         }
         if should_warn_missing_session(MissingSessionCtx {
             has_session_key,
-            has_own_credentials: model.has_own_credentials(),
+            has_own_credentials: model.child_has_own_creds(),
             is_session_based_auth,
             preferred,
         }) {

@@ -3641,8 +3641,13 @@ pub(crate) fn resolve_model_list(
 }
 
 /// Insert grog native catalogs (`claude-bridge/…`, `antigravity/…`, `codex/…`)
-/// without overwriting existing config or remote keys. Do not point these at
-/// an HTTP inference URL — the sampler intercept handles them.
+/// without overwriting existing config or remote keys.
+///
+/// `base_url` is the `grog://` marker, **not** an HTTP origin. Reqwest cannot
+/// POST it. [`sampling_config_for_model`] keeps the qualified catalog id on
+/// `SamplerConfig.model` so the sampler intercept routes to
+/// `grog-providers::consult` (Codex OAuth / Claude CLI / agy), never
+/// `grog://codex/chat/completions`.
 fn merge_grog_native_catalog(
     resolved: &mut IndexMap<String, ModelEntry>,
     endpoints: &EndpointsConfig,
@@ -4416,12 +4421,23 @@ impl ModelEntry {
         }
         self.auth_provider.as_ref()
     }
+    /// Native grog catalog entry (`grog://codex`, `grog://claude-bridge`,
+    /// `grog://antigravity`). Auth lives in that provider, not the parent
+    /// Grok session token. Not the same as BYOK `has_own_credentials` —
+    /// native seats must not advertise `xai.api_key`.
+    pub(crate) fn is_grog_native(&self) -> bool {
+        grog_providers::is_native_base_url(&self.info.base_url)
+    }
     /// `true` when the model has a non-empty `api_key`, an `env_key` that
     /// resolves to a non-empty value, or a named auth provider.
     /// Probes `std::env::var` at call time: result is not stable across env
     /// changes. Never executes a provider command.
     pub(crate) fn has_own_credentials(&self) -> bool {
         self.own_credential().is_some() || self.auth_provider.is_some()
+    }
+    /// Child spawn must not inherit the parent Grok `cached_token`.
+    pub(crate) fn child_has_own_creds(&self) -> bool {
+        self.has_own_credentials() || self.is_grog_native()
     }
 }
 impl std::ops::Deref for ModelEntry {
@@ -4845,6 +4861,14 @@ pub(crate) fn resolve_credentials(
             info.base_url.clone(),
             xai_chat_state::AuthType::ApiKey,
         )
+    } else if model.is_grog_native() {
+        // Codex reads ~/.grog/auth/codex.json; Claude/agy use their CLIs.
+        // Never copy the parent Grok cached_token onto these children.
+        (
+            None,
+            info.base_url.clone(),
+            xai_chat_state::AuthType::ApiKey,
+        )
     } else if let Some(key) = session_key {
         (
             Some(key.to_owned()),
@@ -5210,7 +5234,18 @@ pub(crate) fn sampling_config_for_model(
     user_id: Option<String>,
 ) -> SamplerConfig {
     let info = model.info();
-    let model_name = info.model.clone();
+    // Native grog seats must keep the qualified catalog id (`codex/gpt-5.6-luna`)
+    // on SamplerConfig.model. The backend slug alone (`gpt-5.6-luna`) looks
+    // like HTTP, so the intercept would POST grog://codex/chat/completions.
+    let model_name = if model.is_grog_native() {
+        grog_providers::consult_model_id(
+            info.id.as_deref().unwrap_or(info.model.as_str()),
+            Some(&info.base_url),
+        )
+        .unwrap_or_else(|| info.model.clone())
+    } else {
+        info.model.clone()
+    };
     let max_completion_tokens = info.max_completion_tokens;
     let temperature = info.temperature;
     let top_p = info.top_p;
