@@ -4870,6 +4870,7 @@ dependencies = [
 name = "grog-codex"
 version = "0.1.0"
 dependencies = [
+ "mockito",
  "reqwest 0.12.24",
  "serde",
  "serde_json",
