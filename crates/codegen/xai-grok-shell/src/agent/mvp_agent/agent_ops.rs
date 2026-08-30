@@ -127,7 +127,11 @@ impl MvpAgent {
             }
             None => {
                 let mut fallback = primary.clone();
-                fallback.model = slug;
+                fallback.model = grog_providers::title_generation_fallback_model(
+                    &slug,
+                    &fallback.model,
+                    &fallback.base_url,
+                );
                 fallback
             }
         };

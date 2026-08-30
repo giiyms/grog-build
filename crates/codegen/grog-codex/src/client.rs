@@ -19,12 +19,32 @@ pub enum ClientError {
     Empty,
 }
 
+/// Honest client id on Codex HTTP. We are grog, not the official Codex CLI.
+pub const ORIGINATOR: &str = "grog";
+
+/// ChatGPT Codex `/codex/responses` `input` items.
+///
+/// The backend is not the OpenAI Responses API's "string or list" union: a
+/// live council seat (2026-08-29) died with `HTTP 400: {"detail":"Input must
+/// be a list"}` when `input` was a prompt string. Match the Codex CLI shape
+/// (`type=message` + `input_text` parts).
+pub fn consult_input(prompt: &str) -> Vec<serde_json::Value> {
+    vec![serde_json::json!({
+        "type": "message",
+        "role": "user",
+        "content": [{
+            "type": "input_text",
+            "text": prompt
+        }]
+    })]
+}
+
 /// Responses-shaped body for a Codex consult. `reasoning.effort` is the
 /// Codex thinking flag (`xhigh` for Luna council / AskCodex).
 pub fn consult_body(model: &str, prompt: &str, effort: &str) -> serde_json::Value {
     serde_json::json!({
         "model": model,
-        "input": prompt,
+        "input": consult_input(prompt),
         "store": false,
         "stream": false,
         "reasoning": { "effort": effort },
@@ -53,7 +73,7 @@ pub fn consult_sync(
         // Honest client id: we are grog, not the official Codex CLI.
         // The backend still sees the public Codex OAuth client id and
         // ChatGPT subscription token imported from ~/.codex/auth.json.
-        .header("originator", "grog")
+        .header("originator", ORIGINATOR)
         .json(&body);
     if !account.is_empty() {
         builder = builder.header("ChatGPT-Account-Id", account);
@@ -166,5 +186,28 @@ mod tests {
         assert_eq!(body["reasoning"]["effort"], "xhigh");
         assert_ne!(body["model"], "gpt-5.3-codex");
         assert_ne!(body["model"], "gpt-5.1-codex");
+    }
+
+    #[test]
+    fn consult_body_input_is_a_list_of_message_items() {
+        let prompt = "What is 2+2? Reply with one sentence.";
+        let body = consult_body("gpt-5.6-luna", prompt, crate::DEFAULT_CODEX_EFFORT);
+        assert!(
+            body["input"].is_array(),
+            "ChatGPT Codex backend: HTTP 400 {{\"detail\":\"Input must be a list\"}} when input is a string"
+        );
+        assert!(
+            !body["input"].is_string(),
+            "must not send the prompt as a bare input string"
+        );
+        assert!(!body.as_object().unwrap().contains_key("messages"));
+        let input = body["input"].as_array().expect("input list");
+        assert_eq!(input.len(), 1);
+        assert_eq!(input[0]["type"], "message");
+        assert_eq!(input[0]["role"], "user");
+        assert_eq!(input[0]["content"][0]["type"], "input_text");
+        assert_eq!(input[0]["content"][0]["text"], prompt);
+        assert_eq!(ORIGINATOR, "grog");
+        assert_ne!(ORIGINATOR, "codex_cli_rs");
     }
 }
