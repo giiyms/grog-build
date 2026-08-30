@@ -47,23 +47,25 @@ After a dump, `cargo test -p grog-providers -p grog-claude-bridge -p grog-antigr
 and `cargo test -p xai-grok-shell --lib council_fans_out -- council_projects -- degraded_membership`
 plus `cargo check -p xai-grok-pager-bin`.
 
-## Build and install grog (not the x.ai installer)
+## Install grog (not the x.ai installer)
 
-`install.sh` still ships official `grok` from x.ai/cli. This fork is from source:
+`install.sh` still ships official `grok` from x.ai/cli. This fork’s ship path is
+the GitHub Actions `grog macOS aarch64` workflow (native `macos-14` arm64). Do
+not compile grog on a disk-constrained Mac.
 
-```sh
-export PATH="$HOME/.local/bin:$PATH"
-# protoc: repo `bin/protoc` via DotSlash, or `PROTOC=$(which protoc)`
-cargo build -p xai-grok-pager-bin --release
-install -m 755 target/release/xai-grok-pager "$HOME/.local/bin/grog"
-grog --version
-grog doctor
-```
+After a green run on `main`:
+
+1. Open [Actions → grog macOS aarch64](https://github.com/giiyms/grog-build/actions/workflows/grog-macos-aarch64.yml) and pick the latest successful `main` run.
+2. Download the artifact `grog-<version>-macos-aarch64`.
+3. `chmod +x grog-<version>-macos-aarch64 && mv grog-<version>-macos-aarch64 ~/.local/bin/grog`
+
+The same binary is attached to the rolling prerelease
+[grog-macos-aarch64](https://github.com/giiyms/grog-build/releases/tag/grog-macos-aarch64).
+You can also run the workflow from the Actions tab (**Run workflow**).
 
 `grog --version` prints `grog …`. Grog does **not** check x.ai/cli for grok
 upgrades and does not show the official Grok Build “update available”
-banner. Rebuild from source to update grog. Official `grok`
-(`~/.grok/bin/grok`) is a separate binary.
+banner. Official `grok` (`~/.grok/bin/grok`) is a separate binary.
 
 `grok` remains a valid argv0 alias during the transition.
 

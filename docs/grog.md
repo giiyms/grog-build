@@ -146,14 +146,9 @@ Change:
    different binary and stays out of scope. `grog update` explains the
    from-source rebuild path instead of installing grok.
 
-Local from-source:
-
-```sh
-cargo build -p xai-grok-pager-bin --release
-install -m 755 target/release/xai-grok-pager "$HOME/.local/bin/grog"
-# or, once the extra [[bin]] exists:
-cargo install --path crates/codegen/xai-grok-pager-bin --bin grog
-```
+Ship path is the GitHub-hosted macOS arm64 binary from Actions (workflow
+`grog macOS aarch64` on `main`, or **Run workflow**), not a local `cargo`
+build. See [UPSTREAM.md](UPSTREAM.md#install-grog-not-the-xai-installer).
 
 ### Home, env, project dirs
 
