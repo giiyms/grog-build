@@ -2225,6 +2225,7 @@ impl SessionActor {
                 self.push_system_reminder(&reminder);
             }
             self.drain_interjections_at_safe_point().await;
+            self.maybe_enqueue_advisor_review(true).await;
             self.flush_pending_skill_reminders().await;
             self.inject_pending_monitor_events().await;
             let memory_reminder = self.first_turn_memory_reminder().await;
@@ -2750,6 +2751,7 @@ impl SessionActor {
                     tracing::info!("Drained interjection(s) before turn completion; continuing");
                     continue;
                 }
+                self.maybe_enqueue_advisor_review(false).await;
                 let snapshot = self
                     .finalize_turn_bookkeeping(
                         req_id,

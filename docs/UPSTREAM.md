@@ -19,6 +19,7 @@ renames and stays in a few places.
 | Kind | Where |
 | --- | --- |
 | Native providers | `crates/codegen/grog-*` (`grog-providers`, `grog-claude-bridge`, `grog-antigravity`, `grog-codex`) |
+| Advisor sidecar | `crates/codegen/grog-advisor` (`/advisor`; picker target + `models.advisor`; not a pi wrap) |
 | Council workflow | `crates/codegen/xai-grok-shell/src/session/workflows/council.rhai` |
 | Thin identity patches | pager bin name, `~/.grog` / `$GROG_HOME`, prompts saying **Grog**, privacy defaults, `/council` slash alias, native-turn intercept (qualified `codex/` / `claude-bridge/` / `antigravity/` ids, never POST `grog://`), **no x.ai/cli updater** (`grog --version`, skip grok update toast/changelog CDN) |
 | Product docs | `docs/grog.md`, this file |
@@ -42,7 +43,7 @@ Conflicts usually land in:
 - `xai-grok-agent/templates/*.md` (re-run `python3 scripts/encrypt_templates.py`
   from `crates/codegen/xai-grok-agent` after resolving prompt.md)
 
-After a dump, `cargo test -p grog-providers -p grog-claude-bridge -p grog-antigravity -p grog-codex`
+After a dump, `cargo test -p grog-providers -p grog-claude-bridge -p grog-antigravity -p grog-codex -p grog-advisor`
 and `cargo test -p xai-grok-shell --lib council_fans_out -- council_projects -- degraded_membership`
 plus `cargo check -p xai-grok-pager-bin`.
 

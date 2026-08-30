@@ -921,6 +921,24 @@ pub fn default_settings() -> Vec<SettingMeta> {
             restart_required: false,
             hidden_in_minimal: false,
         },
+        // SHELL-owned. Reads from the pager `advisor_model` mirror of
+        // `[models].advisor`, not the live session model. Empty-string
+        // default = unset. Changing this does not switch the primary.
+        SettingMeta {
+            key: "advisor_model",
+            category: SettingCategory::Models,
+            owner: SettingOwner::Shell,
+            label: "Advisor model",
+            description: "Sidecar reviewer persisted to models.advisor. Enable with /advisor; picking here does not switch the live session.",
+            keywords: &["advisor", "sidecar", "reviewer", "model", "luna", "opus", "sonnet"],
+            kind: SettingKind::DynamicEnum {
+                default: "",
+                source: DynamicEnumSource::ActiveModelCatalog,
+                supports_preview: false,
+            },
+            restart_required: false,
+            hidden_in_minimal: false,
+        },
         // SHARED. `u16` in UiConfig, widened to `i64` for registry.
         // Width changes apply on the next render frame.
         SettingMeta {

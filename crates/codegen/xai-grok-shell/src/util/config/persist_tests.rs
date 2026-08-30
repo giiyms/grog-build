@@ -758,6 +758,52 @@ fn persist_preferred_model_flow_roundtrips_via_load_and_new_from_toml_cfg() {
     assert_eq!(cfg2.models.default.as_deref(), Some("grok-persisted"));
 }
 #[test]
+fn persist_advisor_model_roundtrips_without_enable_flag() {
+    let original = "[models]\ndefault = \"grok-4\"\nweb_search = \"some-search\"\n";
+    let root: TomlValue = toml::from_str(original).unwrap();
+    let mut cfg = load_config_from_toml(&root);
+    cfg.models.advisor = Some("codex/gpt-5.6-luna".to_string());
+    cfg.models.advisor_reasoning_effort =
+        Some(crate::sampling::types::ReasoningEffort::Xhigh);
+    let mut table = if let TomlValue::Table(t) = root {
+        t
+    } else {
+        TomlMap::new()
+    };
+    merge_section(&mut table, "models", &cfg.models);
+    let models = table.get("models").and_then(|v| v.as_table()).unwrap();
+    assert_eq!(
+        models.get("advisor").and_then(|v| v.as_str()),
+        Some("codex/gpt-5.6-luna")
+    );
+    assert_eq!(
+        models.get("default").and_then(|v| v.as_str()),
+        Some("grok-4"),
+        "writing models.advisor must not clobber models.default"
+    );
+    assert!(
+        !models.contains_key("enabled") && !models.contains_key("advisor_enabled"),
+        "advisor on/off must not persist; got keys {:?}",
+        models.keys().collect::<Vec<_>>()
+    );
+    let dumped = toml::to_string(&cfg.models).expect("serialize models");
+    assert!(
+        !dumped.contains("enabled"),
+        "serialized [models] must not grow an enable flag: {dumped}"
+    );
+    let reloaded_root = TomlValue::Table(table);
+    let reloaded = load_config_from_toml(&reloaded_root);
+    assert_eq!(
+        reloaded.models.advisor.as_deref(),
+        Some("codex/gpt-5.6-luna")
+    );
+    assert_eq!(
+        reloaded.models.advisor_reasoning_effort,
+        Some(crate::sampling::types::ReasoningEffort::Xhigh)
+    );
+    assert_eq!(reloaded.models.default.as_deref(), Some("grok-4"));
+}
+#[test]
 fn merge_section_cli_show_tips_writes_under_cli_section() {
     let mut table = TomlMap::new();
     let cfg = crate::agent::config::CliConfig {

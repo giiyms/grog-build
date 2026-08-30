@@ -487,6 +487,50 @@ the **opportunistic second opinion** during a normal session. Do not allow
 AskClaude to call AskAntigravity to call AskCodex in a loop — each Ask\*
 tool is disabled inside an Ask\* and inside council member sessions.
 
+## `/advisor` sidecar (not `/council`, not a pi wrap)
+
+`/advisor` is a **session-scoped sidecar** that watches the live primary
+transcript and may inject at most one note per update (default SILENCE).
+It is not a council deliberation and not a wrap of oh-my-pi.
+
+Enable/disable is **session-only**. The chosen model is persisted like
+the default:
+
+```toml
+[models]
+default = "grok-4"
+advisor = "codex/gpt-5.6-luna"
+advisor_reasoning_effort = "xhigh"
+```
+
+### Picker and settings
+
+The existing model picker is one overlay with two slots:
+
+| Open | Target | Writes |
+| --- | --- | --- |
+| Ctrl+M (scrollback) / `/model` | Session | live primary + `models.default` |
+| `/advisor model`, or Tab when the query is empty | Advisor | `models.advisor` only |
+
+Picking Luna for advisor does **not** move the live session off Grok.
+`/settings` has an **Advisor model** row next to **Default model** (same
+catalog picker). That row persists the slot; it does not enable the
+sidecar.
+
+### Slash
+
+```text
+/advisor              # toggle enable (session-scoped)
+/advisor on           # enable; complement of the primary if no models.advisor
+/advisor luna         # persist + enable Luna (also opus, sonnet, agy, family aliases)
+/advisor model        # same picker, already targeting Advisor
+/advisor status       # pretty name + qualified id + models.advisor vs session override
+/advisor off          # disable this session; models.advisor stays
+```
+
+Consults go through `grog_providers::consult` (native routing: no
+`grog://` through reqwest, no parent grok token on native children).
+
 ## Suggested file layout (new code)
 
 ```text
@@ -494,6 +538,7 @@ crates/codegen/grog-providers/     # trait, registry, model-id parsing
 crates/codegen/grog-codex/         # ChatGPT OAuth + Codex backend
 crates/codegen/grog-claude-bridge/ # native claude spawn + stream-json + AskClaude
 crates/codegen/grog-antigravity/   # native agy spawn + sqlite poll + protobuf + AskAntigravity
+crates/codegen/grog-advisor/       # /advisor sidecar protocol (seats, notes, guard)
 crates/codegen/xai-grok-shell/src/session/workflows/council.rhai
 docs/grog.md                       # this file
 ```

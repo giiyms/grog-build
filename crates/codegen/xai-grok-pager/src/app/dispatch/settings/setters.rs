@@ -1868,6 +1868,100 @@ pub(in crate::app::dispatch) fn clear_default_model(app: &mut AppView) -> Vec<Ef
 }
 
 // ---------------------------------------------------------------------------
+// advisor_model — persist `[models].advisor` without SwitchModel.
+// ---------------------------------------------------------------------------
+
+fn save_advisor_model_toast(value: &str) -> String {
+    format!("\u{2713} Advisor model: {value}")
+}
+
+pub(super) fn set_advisor_model_inner(app: &mut AppView, value: String) {
+    app.advisor_model = value;
+}
+
+pub(in crate::app::dispatch) fn set_advisor_model(
+    app: &mut AppView,
+    new_id: acp::ModelId,
+) -> Vec<Effect> {
+    let ActiveView::Agent(aid) = app.active_view else {
+        tracing::error!(
+            target: "settings",
+            key = "advisor_model",
+            "Action::SetAdvisorModel dispatched with no active agent — no-op",
+        );
+        return vec![];
+    };
+    let (new_display, available_has_new, primary_id) = {
+        let Some(agent) = app.agents.get(&aid) else {
+            tracing::error!(
+                target: "settings",
+                key = "advisor_model",
+                "Action::SetAdvisorModel: active_view::Agent points to missing agent",
+            );
+            return vec![];
+        };
+        let display = agent.session.models.display_name_for(&new_id);
+        let has = agent.session.models.available.contains_key(&new_id);
+        let primary = agent.session.models.current.clone();
+        (display, has, primary)
+    };
+    if !available_has_new {
+        tracing::error!(
+            target: "settings",
+            key = "advisor_model",
+            id = ?new_id,
+            "Action::SetAdvisorModel dispatched with id not in catalog — no-op",
+        );
+        return vec![];
+    }
+    let new_id_str = new_id.0.to_string();
+    let prev_id_str = app.advisor_model.clone();
+    if prev_id_str == new_id_str {
+        return vec![];
+    }
+    set_advisor_model_inner(app, new_id_str.clone());
+    refresh_open_settings_modals(app);
+    tracing::info!(
+        target: "settings",
+        key = "advisor_model",
+        new = ?new_display,
+        new_id = %new_id_str,
+        prev_id = %prev_id_str,
+        primary = ?primary_id.as_ref().map(|id| id.0.as_ref()),
+        "setting changed (advisor slot; live primary unchanged)",
+    );
+    app.show_toast(&save_advisor_model_toast(&new_display));
+    vec![Effect::PersistSetting {
+        key: "advisor_model",
+        value: crate::settings::SettingValue::String(new_id_str),
+        rollback_value: crate::settings::SettingValue::String(prev_id_str),
+    }]
+}
+
+pub(in crate::app::dispatch) fn clear_advisor_model(app: &mut AppView) -> Vec<Effect> {
+    let prev_id_str = app.advisor_model.clone();
+    if prev_id_str.is_empty() {
+        app.show_toast("\u{2713} Advisor model: already unset");
+        return vec![];
+    }
+    set_advisor_model_inner(app, String::new());
+    refresh_open_settings_modals(app);
+    tracing::info!(
+        target: "settings",
+        key = "advisor_model",
+        value = "<cleared>",
+        prev_id = %prev_id_str,
+        "setting changed",
+    );
+    app.show_toast("\u{2713} Advisor model: cleared");
+    vec![Effect::PersistSetting {
+        key: "advisor_model",
+        value: crate::settings::SettingValue::String(String::new()),
+        rollback_value: crate::settings::SettingValue::String(prev_id_str),
+    }]
+}
+
+// ---------------------------------------------------------------------------
 // Model-family settings: fork_secondary_model (and formerly
 // web_search_model, session_summary_model, default_reasoning_effort).
 //

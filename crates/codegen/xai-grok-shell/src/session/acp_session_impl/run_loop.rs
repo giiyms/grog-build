@@ -1888,6 +1888,15 @@ pub(super) async fn run_session(
                                 let _ = respond_to.send(result);
                             });
                         }
+                        SessionCommand::AdvisorReview {
+                            generation,
+                            output,
+                            in_progress,
+                        } => {
+                            session
+                                .handle_advisor_review(generation, output, in_progress)
+                                .await;
+                        }
                         SessionCommand::Interject { text, id, images } => {
                             // Broadcast to every attached client so all panes
                             // viewing this session render the interjection block

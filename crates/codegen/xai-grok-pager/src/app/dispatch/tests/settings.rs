@@ -1355,8 +1355,116 @@ fn set_default_model_resolves_known_name() {
         &effects[1],
         Effect::SwitchModel { model_id: mid, .. } if mid == &id
     ));
-    assert_eq!(app.agents[&agent_id].session.models.current, Some(id));
 }
+
+/// Settings/picker write of `models.advisor` must persist without
+/// `SwitchModel` and without mutating the live primary.
+#[test]
+fn set_advisor_model_persists_without_switching_primary() {
+    use agent_client_protocol as acp;
+    use std::sync::Arc;
+    let mut app = test_app_with_agent();
+    let agent_id = AgentId(0);
+    let primary = acp::ModelId::new(Arc::from("grok-4.5"));
+    let luna = acp::ModelId::new(Arc::from("codex/gpt-5.6-luna"));
+    {
+        let agent = app.agents.get_mut(&agent_id).unwrap();
+        agent.session.models.available.insert(
+            primary.clone(),
+            acp::ModelInfo::new(primary.clone(), "Grok 4.5".to_string()),
+        );
+        agent.session.models.available.insert(
+            luna.clone(),
+            acp::ModelInfo::new(luna.clone(), "GPT-5.6 Luna".to_string()),
+        );
+        agent.session.models.set_current(primary.clone(), None);
+    }
+    let effects = dispatch(Action::SetAdvisorModel(luna.clone()), &mut app);
+    assert!(
+        effects.iter().any(|e| matches!(
+            e,
+            Effect::PersistSetting {
+                key: "advisor_model",
+                value: crate::settings::SettingValue::String(s),
+                ..
+            } if s == "codex/gpt-5.6-luna"
+        )),
+        "expected PersistSetting(advisor_model), got {effects:?}"
+    );
+    assert!(
+        !effects.iter().any(|e| matches!(e, Effect::SwitchModel { .. })),
+        "advisor slot must not SwitchModel, got {effects:?}"
+    );
+    assert_eq!(
+        app.agents[&agent_id].session.models.current.as_ref(),
+        Some(&primary),
+        "live primary must stay on Grok"
+    );
+    assert_eq!(app.advisor_model, "codex/gpt-5.6-luna");
+}
+
+/// `/advisor luna` (AdvisorSetAndEnable) persists the advisor slot and
+/// enqueues the slash for the shell without switching the live primary.
+#[test]
+fn advisor_set_and_enable_persists_without_switching_primary() {
+    use agent_client_protocol as acp;
+    use std::sync::Arc;
+    let mut app = test_app_with_agent();
+    let agent_id = AgentId(0);
+    let primary = acp::ModelId::new(Arc::from("grok-4.5"));
+    let luna = acp::ModelId::new(Arc::from("codex/gpt-5.6-luna"));
+    {
+        let agent = app.agents.get_mut(&agent_id).unwrap();
+        agent.session.models.available.insert(
+            primary.clone(),
+            acp::ModelInfo::new(primary.clone(), "Grok 4.5".to_string()),
+        );
+        agent.session.models.available.insert(
+            luna.clone(),
+            acp::ModelInfo::new(luna.clone(), "GPT-5.6 Luna".to_string()),
+        );
+        agent.session.models.set_current(primary.clone(), None);
+    }
+    let effects = dispatch(
+        Action::AdvisorSetAndEnable {
+            model_id: luna.clone(),
+            pass_through: "/advisor codex/gpt-5.6-luna".into(),
+        },
+        &mut app,
+    );
+    assert!(
+        effects.iter().any(|e| matches!(
+            e,
+            Effect::PersistSetting {
+                key: "advisor_model",
+                value: crate::settings::SettingValue::String(s),
+                ..
+            } if s == "codex/gpt-5.6-luna"
+        )),
+        "expected PersistSetting(advisor_model), got {effects:?}"
+    );
+    assert!(
+        !effects.iter().any(|e| matches!(e, Effect::SwitchModel { .. })),
+        "slash advisor pick must not SwitchModel, got {effects:?}"
+    );
+    assert_eq!(
+        app.agents[&agent_id].session.models.current.as_ref(),
+        Some(&primary),
+        "live primary must stay on Grok"
+    );
+    assert_eq!(app.advisor_model, "codex/gpt-5.6-luna");
+    let queued: Vec<_> = app.agents[&agent_id]
+        .session
+        .pending_prompts
+        .iter()
+        .map(|p| p.text.as_str())
+        .collect();
+    assert!(
+        queued.iter().any(|t| t.contains("/advisor")),
+        "shell must still receive /advisor for session enable, queued={queued:?}"
+    );
+}
+
 /// Re-dispatching the same model
 /// id is idempotent — no PersistSetting, no SwitchModel, no
 /// reasoning_effort reset.
@@ -1719,6 +1827,18 @@ fn move_setting_away_from_default(app: &mut AppView, key: crate::settings::Setti
                 let info = acp::ModelInfo::new(id.clone(), "Test Fork Move".to_string());
                 agent.session.models.available.insert(id.clone(), info);
                 let _ = dispatch(Action::SetForkSecondaryModel(id), app);
+            }
+        }
+        "advisor_model" => {
+            use agent_client_protocol as acp;
+            use std::sync::Arc;
+            if let ActiveView::Agent(aid) = app.active_view
+                && let Some(agent) = app.agents.get_mut(&aid)
+            {
+                let id = acp::ModelId::new(Arc::from("codex/gpt-5.6-luna"));
+                let info = acp::ModelInfo::new(id.clone(), "GPT-5.6 Luna".to_string());
+                agent.session.models.available.insert(id.clone(), info);
+                let _ = dispatch(Action::SetAdvisorModel(id), app);
             }
         }
         "default_selected_permission" => {

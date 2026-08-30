@@ -5,7 +5,7 @@ use super::setters::{
     set_auto_light_theme_inner, set_auto_update_inner, set_collapsed_edit_blocks_inner,
     set_combine_queued_prompts_inner, set_compact_mode, set_compact_mode_inner,
     set_confirm_before_rewind_inner, set_contextual_hint_inner, set_default_model_inner,
-    set_default_selected_permission_inner, set_display_refresh_auto_cadence_inner,
+    set_advisor_model_inner, set_default_selected_permission_inner, set_display_refresh_auto_cadence_inner,
     set_follow_up_behavior_inner, set_fork_secondary_model_inner, set_group_tool_verbs_inner,
     set_hunk_tracker_mode_inner, set_invert_scroll_inner, set_keep_text_selection_inner,
     set_max_thoughts_width_inner, set_multiline_mode, set_page_flip_on_send_inner,
@@ -75,6 +75,11 @@ pub(crate) fn refresh_open_settings_modals(app: &mut AppView) {
                 yolo_mode: agent.session.is_yolo(),
                 auto_mode: agent.session.is_auto(),
                 current_model_name: agent.session.models.current_model_name(),
+                advisor_model_id: if app.advisor_model.is_empty() {
+                    None
+                } else {
+                    Some(app.advisor_model.clone())
+                },
                 available_models: agent
                     .session
                     .models
@@ -130,6 +135,60 @@ pub(in crate::app::dispatch) fn dispatch_open_command_palette(app: &mut AppView)
         window: crate::views::modal_window::ModalWindowState::new(),
     });
     vec![]
+}
+
+/// Open the shared `/model` ArgPicker, targeting Session or Advisor.
+pub(in crate::app::dispatch) fn dispatch_open_model_picker(
+    app: &mut AppView,
+    target: crate::views::modal::ModelPickerTarget,
+) -> Vec<Effect> {
+    use crate::views::modal::ActiveModal;
+    let ActiveView::Agent(id) = app.active_view else {
+        return vec![];
+    };
+    let Some(agent) = app.agents.get_mut(&id) else {
+        return vec![];
+    };
+    let command = target.command();
+    if let Some(cmd) = agent.prompt.slash_controller.registry().get(command) {
+        let ctx = agent.prompt.slash_controller.app_ctx(&agent.session.models);
+        if let Some(items) = cmd.suggest_args(&ctx, "")
+            && !items.is_empty()
+        {
+            agent.active_modal = Some(ActiveModal::ArgPicker {
+                command: command.to_string(),
+                args_query: String::new(),
+                items: items.clone(),
+                original_items: items,
+                state: crate::views::picker::PickerState::input_active(),
+                previous_palette: None,
+                window: crate::views::modal_window::ModalWindowState::new(),
+            });
+        }
+    }
+    vec![]
+}
+
+/// Persist `models.advisor` then enqueue `/advisor …` so the shell enables
+/// the sidecar. Does not emit `SwitchModel`.
+pub(in crate::app::dispatch) fn dispatch_advisor_set_and_enable(
+    app: &mut AppView,
+    model_id: agent_client_protocol::ModelId,
+    pass_through: String,
+) -> Vec<Effect> {
+    let effects = super::setters::set_advisor_model(app, model_id);
+    if let ActiveView::Agent(id) = app.active_view
+        && let Some(agent) = app.agents.get_mut(&id)
+    {
+        let skill_token_ranges = agent
+            .prompt
+            .slash_controller
+            .recognized_token_ranges(&pass_through, &agent.session.models);
+        agent
+            .session
+            .enqueue_prompt_with_skill_tokens(pass_through, skill_token_ranges);
+    }
+    effects
 }
 
 /// Open the How-to Guides doc picker (`/docs`). Toggles closed if already open.
@@ -225,6 +284,11 @@ pub(in crate::app::dispatch) fn dispatch_open_settings(
         yolo_mode: agent.session.is_yolo(),
         auto_mode: agent.session.is_auto(),
         current_model_name: agent.session.models.current_model_name(),
+        advisor_model_id: if app.advisor_model.is_empty() {
+            None
+        } else {
+            Some(app.advisor_model.clone())
+        },
         available_models: agent
             .session
             .models
@@ -730,6 +794,11 @@ pub(crate) fn build_pager_snapshot(app: &AppView) -> crate::settings::PagerLocal
         yolo_mode: agent_yolo_mode(app),
         auto_mode: agent_auto_mode(app),
         current_model_name: agent_current_model_name(app),
+        advisor_model_id: if app.advisor_model.is_empty() {
+            None
+        } else {
+            Some(app.advisor_model.clone())
+        },
         available_models: agent_available_models(app),
         coding_data_sharing_opt_out: app.coding_data_retention_opt_out,
         coding_data_sharing_lock: app.coding_data_sharing_lock(),
@@ -876,6 +945,19 @@ pub(in crate::app::dispatch) fn action_for_reset(
                     target: "settings",
                     value = %s,
                     "action_for_reset(default_model) received non-empty default — \
+                     registry/dispatch skew (default should be empty string)",
+                );
+                None
+            }
+        }
+        ("advisor_model", SettingValue::String(s)) => {
+            if s.is_empty() {
+                Some(Action::ClearAdvisorModel)
+            } else {
+                tracing::error!(
+                    target: "settings",
+                    value = %s,
+                    "action_for_reset(advisor_model) received non-empty default — \
                      registry/dispatch skew (default should be empty string)",
                 );
                 None
@@ -1225,6 +1307,9 @@ pub(in crate::app::dispatch) fn apply_setting_rollback(
                 s.clone()
             };
             set_fork_secondary_model_inner(app, restored);
+        }
+        ("advisor_model", SettingValue::String(s)) => {
+            set_advisor_model_inner(app, s.clone());
         }
 
         _ => {

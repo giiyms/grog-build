@@ -261,6 +261,10 @@ pub struct PagerLocalSnapshot {
     /// Currently-selected model's display name, or `None` if no catalog
     /// has loaded yet.
     pub current_model_name: Option<String>,
+    /// Persisted `[models].advisor` id (catalog key). Empty / None = unset.
+    /// Independent of [`Self::current_model_name`] so the settings row does
+    /// not track the live primary.
+    pub advisor_model_id: Option<String>,
     /// `(display_name, ModelId)` pairs from the active session's catalog.
     /// Cloned into the snapshot so the modal's validator/resolver is
     /// self-contained (the modal outlives the borrow on `app.agents`).
@@ -314,6 +318,7 @@ impl Default for PagerLocalSnapshot {
             yolo_mode: false,
             auto_mode: false,
             current_model_name: None,
+            advisor_model_id: None,
             available_models: Vec::new(),
             coding_data_sharing_opt_out: true,
             coding_data_sharing_lock: None,
@@ -689,6 +694,20 @@ pub fn current_value_for(
         "default_model" => Some(SettingValue::String(
             pager.current_model_name.clone().unwrap_or_default(),
         )),
+        // advisor_model: persisted slot, not the live primary. Empty = unset.
+        "advisor_model" => Some(SettingValue::String({
+            let id = pager.advisor_model_id.as_deref().unwrap_or("");
+            if id.is_empty() {
+                String::new()
+            } else {
+                pager
+                    .available_models
+                    .iter()
+                    .find(|(_, mid)| mid.0.as_ref() == id)
+                    .map(|(name, _)| name.clone())
+                    .unwrap_or_else(|| id.to_string())
+            }
+        })),
         // max_thoughts_width: `u16` widened to `i64`.
         "max_thoughts_width" => Some(SettingValue::Int(ui.max_thoughts_width as i64)),
         // coding_data_sharing: inverts the `_opt_out` bool.
@@ -944,6 +963,13 @@ mod tests {
                         "default_model registry default must be empty string — \
                          the live default is resolved dynamically from \
                          cfg.models.default at session start",
+                    );
+                }
+                ("advisor_model", SettingKind::DynamicEnum { default, .. }) => {
+                    assert_eq!(
+                        *default, "",
+                        "advisor_model registry default must be empty string — \
+                         unset models.advisor (no sidecar pin)",
                     );
                 }
                 // max_thoughts_width: `u16` widened to `i64`.

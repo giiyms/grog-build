@@ -936,6 +936,10 @@ impl SessionActor {
                 }
                 ok_end_turn(0, None)
             }
+            BuiltinAction::Advisor { args } => {
+                self.handle_advisor_slash(&args).await;
+                ok_end_turn(0, None)
+            }
             BuiltinAction::WorkflowManage { run_id, op } => {
                 let msg = self.manage_workflow_run(&run_id, &op).await;
                 self.send_host_turn_slash_command_output(&msg).await;

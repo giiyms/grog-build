@@ -137,6 +137,8 @@ mod mcp;
 mod model_switch;
 #[path = "acp_session_impl/slash_exec.rs"]
 mod slash_exec;
+#[path = "acp_session_impl/advisor.rs"]
+mod advisor;
 use super::PromptOrigin;
 use super::acp_types;
 use super::chat_persistence;
@@ -776,6 +778,11 @@ pub(crate) struct SessionActor {
     /// Pushed by `SessionCommand::Interject` handler, drained at safe
     /// points in `process_conversation_turn`. Internally synchronized.
     pub(crate) pending_interjections: InterjectionBuffer<acp::ImageContent>,
+    /// Session-scoped `/advisor` sidecar. Enable is not persisted.
+    pub(crate) advisor: parking_lot::Mutex<grog_advisor::AdvisorState>,
+    /// Clone of the session mailbox so background advisor consults can
+    /// post [`SessionCommand::AdvisorReview`] without capturing `Self`.
+    pub(crate) session_cmd_tx: mpsc::UnboundedSender<SessionCommand>,
     /// Skill-announcement reminders that arrived while a turn was running,
     /// flushed at the same safe points as `pending_interjections` plus on
     /// cancel/idle. The flush also delivers the plan tracker's buffered

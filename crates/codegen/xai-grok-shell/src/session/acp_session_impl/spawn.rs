@@ -1683,6 +1683,8 @@ pub(crate) async fn spawn_session_actor(
         max_retries: xai_grok_sampler::resolve_max_retries(max_retries),
         rate_limit_waits: RateLimitWaitConfig::with_max_attempts(subagent_rate_limit_max_attempts),
         pending_interjections: InterjectionBuffer::new(),
+        advisor: parking_lot::Mutex::new(grog_advisor::AdvisorState::default()),
+        session_cmd_tx: cmd_tx.clone(),
         pending_skill_reminders: Mutex::new(Vec::new()),
         idle_flush_timeout: memory_config
             .as_ref()

@@ -1756,6 +1756,7 @@ impl SessionActor {
             .await;
         self.persist_announcement_state().await;
         self.plan_mode.lock().reset_after_compaction();
+        self.advisor.lock().reset_after_rewrite();
         self.persist_plan_mode_state();
         self.dispatch_hook(
             xai_grok_hooks::event::HookEventName::PostCompact,

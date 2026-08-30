@@ -157,6 +157,8 @@ async fn create_test_actor(
         rate_limit_waits: crate::session::acp_session::RateLimitWaitConfig::default(),
         max_turns: None,
         pending_interjections: InterjectionBuffer::new(),
+        advisor: parking_lot::Mutex::new(grog_advisor::AdvisorState::default()),
+        session_cmd_tx: tokio::sync::mpsc::unbounded_channel().0,
         pending_skill_reminders: Mutex::new(Vec::new()),
         idle_flush_timeout: None,
         dream_check_timeout: None,

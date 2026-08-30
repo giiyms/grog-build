@@ -643,6 +643,9 @@ pub struct AppView {
     /// startup; updated synchronously by `set_X_inner` so dispatch
     /// stays sans-IO.
     pub current_ui: xai_grok_shell::agent::config::UiConfig,
+    /// In-memory snapshot of `[models].advisor`. Independent of the live
+    /// session model so settings/picker writes do not switch the primary.
+    pub advisor_model: String,
     /// Working directory.
     pub cwd: PathBuf,
     /// Whether the cwd is inside a git repository (any ancestor has `.git`).
@@ -1510,6 +1513,7 @@ impl AppView {
             registry: ActionRegistry::defaults(),
             settings_registry: Arc::new(crate::settings::SettingsRegistry::defaults()),
             current_ui: xai_grok_shell::agent::config::UiConfig::default(),
+            advisor_model: String::new(),
             cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             cwd_has_git_ancestor: std::env::current_dir()
                 .ok()

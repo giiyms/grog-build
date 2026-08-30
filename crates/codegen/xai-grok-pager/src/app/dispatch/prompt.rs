@@ -552,6 +552,11 @@ pub(super) fn dispatch_send_prompt_inner(
                     yolo_mode: agent.session.is_yolo(),
                     auto_mode: agent.session.is_auto(),
                     current_model_name: agent.session.models.current_model_name(),
+                    advisor_model_id: if app.advisor_model.is_empty() {
+                        None
+                    } else {
+                        Some(app.advisor_model.clone())
+                    },
                     available_models: agent
                         .session
                         .models

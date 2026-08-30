@@ -1233,6 +1233,14 @@ pub(crate) async fn persist_setting(
                 .await
                 .map_err(|e| e.to_string())
         }
+        "advisor_model" => {
+            let SettingValue::String(s) = value else {
+                return Err(kind_mismatch("advisor_model", "String", &value));
+            };
+            xai_grok_shell::util::config::set_advisor_model(s)
+                .await
+                .map_err(|e| e.to_string())
+        }
         "scroll_speed" => {
             let SettingValue::Int(i) = value else {
                 return Err(kind_mismatch("scroll_speed", "Int", &value));

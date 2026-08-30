@@ -73,8 +73,8 @@ use super::session::load::{
 };
 use super::session::modal::{dispatch_rename_session, dispatch_reset_session_title};
 use super::settings::setters::{
-    clear_default_model, clear_fork_secondary_model, preview_auto_dark_theme,
-    preview_auto_light_theme, preview_theme, set_ask_user_question_timeout_enabled,
+    clear_advisor_model, clear_default_model, clear_fork_secondary_model, preview_auto_dark_theme,
+    preview_auto_light_theme, preview_theme, set_advisor_model, set_ask_user_question_timeout_enabled,
     set_auto_dark_theme, set_auto_light_theme, set_auto_update, set_collapsed_edit_blocks,
     set_combine_queued_prompts, set_compact_mode, set_confirm_before_rewind,
     set_contextual_hint_image_input, set_contextual_hint_plan_mode, set_contextual_hint_send_now,
@@ -89,10 +89,10 @@ use super::settings::setters::{
     set_voice_keybind_enabled, set_voice_stt_language,
 };
 use super::settings::ui::{
-    dispatch_confirm_reset_setting, dispatch_open_command_palette, dispatch_open_howto_guides,
-    dispatch_open_reset_confirm, dispatch_open_settings, dispatch_toggle_compact_mode,
-    dispatch_toggle_mouse_capture, dispatch_toggle_multiline, dispatch_toggle_timestamps,
-    dispatch_toggle_vim_mode,
+    dispatch_advisor_set_and_enable, dispatch_confirm_reset_setting, dispatch_open_command_palette,
+    dispatch_open_howto_guides, dispatch_open_model_picker, dispatch_open_reset_confirm,
+    dispatch_open_settings, dispatch_toggle_compact_mode, dispatch_toggle_mouse_capture,
+    dispatch_toggle_multiline, dispatch_toggle_timestamps, dispatch_toggle_vim_mode,
 };
 use super::status::{
     dispatch_copy_session_id, dispatch_manage_billing, dispatch_open_gboom, dispatch_open_tutorial,
@@ -1125,6 +1125,13 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::SetAutoLightTheme(v) => set_auto_light_theme(app, v),
         Action::SetDefaultModel(v) => set_default_model(app, v),
         Action::ClearDefaultModel => clear_default_model(app),
+        Action::SetAdvisorModel(v) => set_advisor_model(app, v),
+        Action::ClearAdvisorModel => clear_advisor_model(app),
+        Action::AdvisorSetAndEnable {
+            model_id,
+            pass_through,
+        } => dispatch_advisor_set_and_enable(app, model_id, pass_through),
+        Action::OpenModelPicker { target } => dispatch_open_model_picker(app, target),
         Action::SetForkSecondaryModel(v) => set_fork_secondary_model(app, v),
         Action::ClearForkSecondaryModel => clear_fork_secondary_model(app),
         Action::SetMaxThoughtsWidth(v) => set_max_thoughts_width(app, v),
