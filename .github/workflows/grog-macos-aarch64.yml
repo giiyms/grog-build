@@ -1,0 +1,147 @@
+# Native Darwin aarch64 `grog` for this fork (giiyms/grog-build).
+# Not official xAI grok — do not name, install, or advertise this binary as grok.
+#
+# Runs on GitHub-hosted Apple Silicon (macos-14). No Linux, no cross-compile.
+# rust-toolchain.toml pins the compiler (1.94.0 last we knew); extra Linux
+# targets listed there are unused on this job.
+
+name: grog macOS aarch64
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - ".github/workflows/grog-macos-aarch64.yml"
+      - "rust-toolchain.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: grog-macos-aarch64-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build grog (macos-aarch64)
+    runs-on: macos-14
+    timeout-minutes: 180
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: 0
+    steps:
+      - name: Check Apple Silicon host
+        run: |
+          set -euo pipefail
+          uname -m
+          test "$(uname -m)" = "arm64"
+
+      - uses: actions/checkout@v4
+
+      - name: Install Homebrew build deps
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
+        run: |
+          set -euo pipefail
+          brew list protobuf >/dev/null 2>&1 || brew install protobuf
+          brew list ripgrep >/dev/null 2>&1 || brew install ripgrep
+          protoc="$(brew --prefix protobuf)/bin/protoc"
+          rg="$(brew --prefix ripgrep)/bin/rg"
+          test -x "$protoc"
+          test -x "$rg"
+          "$protoc" --version
+          "$rg" --version
+          echo "PROTOC=$protoc" >> "$GITHUB_ENV"
+          echo "GROK_TOOLS_BUNDLE_RG_PATH=$rg" >> "$GITHUB_ENV"
+
+      - name: Read rust-toolchain.toml channel
+        id: toolchain
+        run: |
+          set -euo pipefail
+          channel="$(awk -F '"' '/^channel = / { print $2; exit }' rust-toolchain.toml)"
+          test -n "$channel"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust ${{ steps.toolchain.outputs.channel }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.toolchain.outputs.channel }}
+
+      - name: Pin rustup to the toml channel
+        run: |
+          set -euo pipefail
+          rustc --version
+          cargo --version
+          # Override rust-toolchain.toml `targets` (Linux triples) so this
+          # Darwin job does not also fetch unused linux-gnu std.
+          echo "RUSTUP_TOOLCHAIN=${{ steps.toolchain.outputs.channel }}" >> "$GITHUB_ENV"
+
+      - name: Read grog version
+        id: meta
+        run: |
+          set -euo pipefail
+          version="$(awk -F '"' '/^version = / { print $2; exit }' crates/codegen/xai-grok-pager-bin/Cargo.toml)"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "artifact=grog-${version}-macos-aarch64" >> "$GITHUB_OUTPUT"
+
+      - name: Build grog (release)
+        run: cargo build -p xai-grok-pager-bin --release --bin grog
+
+      - name: Stage artifact
+        id: stage
+        run: |
+          set -euo pipefail
+          src=target/release/grog
+          test -x "$src"
+          # `[profile.release]` does not strip; post-build strip matches the
+          # dist convention in root Cargo.toml (symbols kept until CI strips).
+          strip "$src"
+          mkdir -p dist
+          # Versioned filename so a download is obviously this fork's grog,
+          # not official xAI grok.
+          dest="dist/${{ steps.meta.outputs.artifact }}"
+          cp "$src" "$dest"
+          chmod 755 "$dest"
+          shasum -a 256 "$dest" | tee "${dest}.sha256"
+          file "$dest"
+          lipo -info "$dest"
+          "$dest" --version
+          echo "path=$dest" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.artifact }}
+          path: |
+            dist/${{ steps.meta.outputs.artifact }}
+            dist/${{ steps.meta.outputs.artifact }}.sha256
+          if-no-files-found: error
+
+      - name: Attach to GitHub Release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: grog-macos-aarch64
+          ASSET: ${{ steps.stage.outputs.path }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          notes="$(printf '%s\n' \
+            'Native macOS arm64 grog from giiyms/grog-build (this fork). Not official xAI grok; do not replace ~/.grok/bin/grok.' \
+            '' \
+            "Version: ${VERSION}" \
+            "Commit: ${GITHUB_SHA}" \
+            'Runner: macos-14 (Darwin aarch64)' \
+            '' \
+            "chmod +x grog-${VERSION}-macos-aarch64 && mv grog-${VERSION}-macos-aarch64 ~/.local/bin/grog")"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release delete "$TAG" --yes --cleanup-tag
+          fi
+          gh release create "$TAG" "$ASSET" "${ASSET}.sha256" \
+            --target "$GITHUB_SHA" \
+            --title "grog ${VERSION} (macOS aarch64)" \
+            --notes "$notes" \
+            --prerelease
