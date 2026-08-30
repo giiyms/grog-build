@@ -15,6 +15,8 @@ pub enum ClientError {
     Http { status: u16, body: String },
     #[error("transport: {0}")]
     Transport(String),
+    #[error("Codex stream: {0}")]
+    Stream(String),
     #[error("Codex response had no assistant text")]
     Empty,
 }
@@ -41,12 +43,17 @@ pub fn consult_input(prompt: &str) -> Vec<serde_json::Value> {
 
 /// Responses-shaped body for a Codex consult. `reasoning.effort` is the
 /// Codex thinking flag (`xhigh` for Luna council / AskCodex).
+///
+/// ChatGPT Codex `/codex/responses` rejects non-streaming consults
+/// (`HTTP 400: {"detail":"Stream must be set to true"}`). Codex CLI always
+/// sends `stream: true` and drains the SSE. Grog does the same for a
+/// one-shot consult and assembles the final assistant text.
 pub fn consult_body(model: &str, prompt: &str, effort: &str) -> serde_json::Value {
     serde_json::json!({
         "model": model,
         "input": consult_input(prompt),
         "store": false,
-        "stream": false,
+        "stream": true,
         "reasoning": { "effort": effort },
     })
 }
@@ -57,18 +64,34 @@ pub fn consult_sync(
     prompt: &str,
     effort: Option<&str>,
 ) -> Result<ConsultResult, ClientError> {
+    consult_at(
+        &format!("{CODEX_BACKEND}/codex/responses"),
+        auth,
+        model,
+        prompt,
+        effort,
+    )
+}
+
+fn consult_at(
+    url: &str,
+    auth: &CodexAuth,
+    model: &str,
+    prompt: &str,
+    effort: Option<&str>,
+) -> Result<ConsultResult, ClientError> {
     let tokens = auth.tokens.as_ref().ok_or(ClientError::NoToken)?;
     if tokens.access_token.is_empty() {
         return Err(ClientError::NoToken);
     }
     let account = chatgpt_account_id(auth).unwrap_or_default();
-    let url = format!("{CODEX_BACKEND}/codex/responses");
     let effort = effort.unwrap_or(crate::DEFAULT_CODEX_EFFORT);
     let body = consult_body(model, prompt, effort);
     let mut builder = reqwest::blocking::Client::new()
-        .post(&url)
+        .post(url)
         .bearer_auth(&tokens.access_token)
         .header("Content-Type", "application/json")
+        .header("Accept", "text/event-stream")
         .header("OpenAI-Beta", "responses=experimental")
         // Honest client id: we are grog, not the official Codex CLI.
         // The backend still sees the public Codex OAuth client id and
@@ -82,17 +105,20 @@ pub fn consult_sync(
         .send()
         .map_err(|e| ClientError::Transport(e.to_string()))?;
     let status = resp.status().as_u16();
-    let json: serde_json::Value = resp
-        .json()
+    let text = resp
+        .text()
         .map_err(|e| ClientError::Transport(e.to_string()))?;
+    consult_http_result(status, &text)
+}
+
+fn consult_http_result(status: u16, body: &str) -> Result<ConsultResult, ClientError> {
     if !(200..300).contains(&status) {
         return Err(ClientError::Http {
             status,
-            body: json.to_string(),
+            body: body.to_string(),
         });
     }
-    let text = extract_output_text(&json).ok_or(ClientError::Empty)?;
-    Ok(ConsultResult { text })
+    parse_consult_stream(body)
 }
 
 pub fn refresh_sync(auth: &CodexAuth) -> Result<CodexAuth, ClientError> {
@@ -137,37 +163,177 @@ pub fn refresh_sync(auth: &CodexAuth) -> Result<CodexAuth, ClientError> {
     Ok(next)
 }
 
-fn extract_output_text(json: &serde_json::Value) -> Option<String> {
-    if let Some(s) = json.get("output_text").and_then(|v| v.as_str()) {
-        let t = s.trim();
-        if !t.is_empty() {
-            return Some(t.to_string());
+/// Assemble a one-shot consult from a Codex `/codex/responses` SSE body.
+///
+/// Codex CLI always streams. Final text prefers `response.completed` output,
+/// then `response.output_item.done` messages, then concatenated
+/// `response.output_text.delta` chunks.
+pub fn parse_consult_stream(body: &str) -> Result<ConsultResult, ClientError> {
+    let payloads = sse_data_payloads(body);
+    if payloads.is_empty() {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(body) {
+            return extract_output_text(&json)
+                .map(|text| ConsultResult { text })
+                .ok_or(ClientError::Empty);
         }
+        return Err(ClientError::Empty);
+    }
+
+    let mut deltas = String::new();
+    let mut item_texts = Vec::new();
+    let mut done_text: Option<String> = None;
+    let mut completed_text: Option<String> = None;
+    let mut failed: Option<String> = None;
+
+    for payload in &payloads {
+        if payload == "[DONE]" {
+            break;
+        }
+        let Ok(event) = serde_json::from_str::<serde_json::Value>(payload) else {
+            continue;
+        };
+        let kind = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        match kind {
+            "response.output_text.delta" => {
+                if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
+                    deltas.push_str(delta);
+                }
+            }
+            "response.output_item.done" => {
+                if let Some(item) = event.get("item") {
+                    if let Some(text) = extract_item_text(item) {
+                        item_texts.push(text);
+                    }
+                }
+            }
+            "response.output_text.done" => {
+                if let Some(text) = nonempty_trim(event.get("text").and_then(|v| v.as_str())) {
+                    done_text = Some(text);
+                }
+            }
+            "response.completed" | "response.incomplete" => {
+                if let Some(resp) = event.get("response") {
+                    if let Some(text) = extract_output_text(resp) {
+                        completed_text = Some(text);
+                    }
+                }
+            }
+            "response.failed" => {
+                failed = Some(failed_message(&event));
+            }
+            "error" => {
+                failed = Some(
+                    event
+                        .pointer("/error/message")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| event.get("message").and_then(|v| v.as_str()))
+                        .unwrap_or("error")
+                        .to_string(),
+                );
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(msg) = failed {
+        return Err(ClientError::Stream(msg));
+    }
+
+    let text = completed_text
+        .or_else(|| {
+            let joined = item_texts.join("");
+            nonempty_trim(Some(&joined))
+        })
+        .or(done_text)
+        .or_else(|| nonempty_trim(Some(&deltas)))
+        .ok_or(ClientError::Empty)?;
+    Ok(ConsultResult { text })
+}
+
+fn sse_data_payloads(body: &str) -> Vec<String> {
+    let mut events = Vec::new();
+    let mut data_lines = Vec::new();
+    for raw_line in body.split('\n') {
+        let line = raw_line.strip_suffix('\r').unwrap_or(raw_line);
+        if line.is_empty() {
+            if !data_lines.is_empty() {
+                events.push(data_lines.join("\n"));
+                data_lines.clear();
+            }
+            continue;
+        }
+        if line.starts_with(':') {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("data:") {
+            let rest = rest.strip_prefix(' ').unwrap_or(rest);
+            data_lines.push(rest.to_string());
+        }
+    }
+    if !data_lines.is_empty() {
+        events.push(data_lines.join("\n"));
+    }
+    events
+}
+
+fn failed_message(event: &serde_json::Value) -> String {
+    event
+        .pointer("/response/error/message")
+        .and_then(|v| v.as_str())
+        .or_else(|| event.pointer("/error/message").and_then(|v| v.as_str()))
+        .unwrap_or("response.failed")
+        .to_string()
+}
+
+fn nonempty_trim(s: Option<&str>) -> Option<String> {
+    s.map(str::trim)
+        .filter(|t| !t.is_empty())
+        .map(str::to_string)
+}
+
+fn extract_output_text(json: &serde_json::Value) -> Option<String> {
+    if let Some(text) = nonempty_trim(json.get("output_text").and_then(|v| v.as_str())) {
+        return Some(text);
     }
     let mut parts = Vec::new();
     if let Some(output) = json.get("output").and_then(|v| v.as_array()) {
         for item in output {
-            if let Some(content) = item.get("content").and_then(|v| v.as_array()) {
-                for block in content {
-                    if let Some(t) = block.get("text").and_then(|v| v.as_str()) {
-                        parts.push(t);
-                    }
-                }
-            }
+            append_item_text(item, &mut parts);
         }
-    }
-    let joined = parts.join("");
-    let joined = joined.trim();
-    if joined.is_empty() {
-        None
     } else {
-        Some(joined.to_string())
+        append_item_text(json, &mut parts);
+    }
+    nonempty_trim(Some(&parts.join("")))
+}
+
+fn extract_item_text(item: &serde_json::Value) -> Option<String> {
+    let mut parts = Vec::new();
+    append_item_text(item, &mut parts);
+    nonempty_trim(Some(&parts.join("")))
+}
+
+fn append_item_text<'a>(item: &'a serde_json::Value, parts: &mut Vec<&'a str>) {
+    if item.get("type").and_then(|v| v.as_str()) == Some("reasoning") {
+        return;
+    }
+    let Some(content) = item.get("content").and_then(|v| v.as_array()) else {
+        return;
+    };
+    for block in content {
+        let ty = block.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        if !ty.is_empty() && ty != "output_text" && ty != "text" && ty != "input_text" {
+            continue;
+        }
+        if let Some(t) = block.get("text").and_then(|v| v.as_str()) {
+            parts.push(t);
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::CodexTokens;
 
     #[test]
     fn extracts_output_text_and_content_blocks() {
@@ -209,5 +375,204 @@ mod tests {
         assert_eq!(input[0]["content"][0]["text"], prompt);
         assert_eq!(ORIGINATOR, "grog");
         assert_ne!(ORIGINATOR, "codex_cli_rs");
+    }
+
+    #[test]
+    fn consult_body_stream_must_be_true() {
+        let body = consult_body(
+            "gpt-5.6-luna",
+            "What is 2+2? Reply with one sentence.",
+            crate::DEFAULT_CODEX_EFFORT,
+        );
+        assert_eq!(
+            body["stream"], true,
+            "live Codex 400: {{\"detail\":\"Stream must be set to true\"}}"
+        );
+        assert_ne!(body["stream"], false);
+        assert!(body["input"].is_array());
+        assert_eq!(ORIGINATOR, "grog");
+    }
+
+    #[test]
+    fn parse_consult_stream_assembles_mocked_sse_into_text() {
+        let sse = mock_codex_sse("2 + 2 equals 4.");
+        let out = parse_consult_stream(&sse).expect("stream text");
+        assert_eq!(out.text, "2 + 2 equals 4.");
+    }
+
+    #[test]
+    fn parse_consult_stream_uses_output_text_deltas_when_completed_has_no_output() {
+        let sse = format!(
+            "event: response.output_text.delta\ndata: {}\n\n\
+event: response.output_text.delta\ndata: {}\n\n\
+event: response.completed\ndata: {}\n\ndata: [DONE]\n\n",
+            serde_json::json!({"type":"response.output_text.delta","delta":"2 + 2"}),
+            serde_json::json!({"type":"response.output_text.delta","delta":" equals 4."}),
+            serde_json::json!({"type":"response.completed","response":{"id":"resp_1"}}),
+        );
+        let out = parse_consult_stream(&sse).expect("delta text");
+        assert_eq!(out.text, "2 + 2 equals 4.");
+    }
+
+    #[test]
+    fn parse_consult_stream_skips_reasoning_items() {
+        let sse = format!(
+            "event: response.output_item.done\ndata: {}\n\n\
+event: response.output_item.done\ndata: {}\n\n\
+data: [DONE]\n\n",
+            serde_json::json!({
+                "type": "response.output_item.done",
+                "item": {
+                    "type": "reasoning",
+                    "content": [{"type": "output_text", "text": "thinking"}]
+                }
+            }),
+            serde_json::json!({
+                "type": "response.output_item.done",
+                "item": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "2 + 2 equals 4."}]
+                }
+            }),
+        );
+        let out = parse_consult_stream(&sse).expect("message text");
+        assert_eq!(out.text, "2 + 2 equals 4.");
+    }
+
+    #[test]
+    fn parse_consult_stream_reports_failed_event() {
+        let sse = format!(
+            "event: response.failed\ndata: {}\n\n",
+            serde_json::json!({
+                "type": "response.failed",
+                "response": {"error": {"message": "rate limited"}}
+            })
+        );
+        let err = parse_consult_stream(&sse).unwrap_err();
+        assert!(matches!(err, ClientError::Stream(msg) if msg.contains("rate limited")));
+    }
+
+    #[test]
+    fn http_400_stream_must_be_true_is_not_parsed_as_success() {
+        let err =
+            consult_http_result(400, r#"{"detail":"Stream must be set to true"}"#).unwrap_err();
+        match err {
+            ClientError::Http { status, body } => {
+                assert_eq!(status, 400);
+                assert!(body.contains("Stream must be set to true"));
+            }
+            other => panic!("expected HTTP 400, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn consult_sync_parses_mocked_stream_response() {
+        let mut server = mockito::Server::new();
+        let sse = mock_codex_sse("2 + 2 equals 4.");
+        let mock = server
+            .mock("POST", "/codex/responses")
+            .match_header("originator", "grog")
+            .match_header("accept", "text/event-stream")
+            .match_body(mockito::Matcher::PartialJson(serde_json::json!({
+                "stream": true,
+                "store": false,
+                "model": "gpt-5.6-luna",
+            })))
+            .with_status(200)
+            .with_header("content-type", "text/event-stream")
+            .with_body(sse)
+            .create();
+
+        let auth = CodexAuth {
+            tokens: Some(CodexTokens {
+                access_token: "tok".into(),
+                refresh_token: None,
+                id_token: None,
+                account_id: Some("acct-1".into()),
+            }),
+            last_refresh: None,
+            openai_api_key: None,
+        };
+        let url = format!("{}/codex/responses", server.url());
+        let out = consult_at(&url, &auth, "gpt-5.6-luna", "What is 2+2?", Some("xhigh"))
+            .expect("mocked consult");
+        assert_eq!(out.text, "2 + 2 equals 4.");
+        mock.assert();
+    }
+
+    #[test]
+    fn consult_sync_mocked_request_sends_input_list_and_stream_true() {
+        let mut server = mockito::Server::new();
+        let prompt = "What is 2+2? Reply with one sentence.";
+        let sse = mock_codex_sse("2 + 2 equals 4.");
+        let mock = server
+            .mock("POST", "/codex/responses")
+            .match_body(mockito::Matcher::PartialJson(serde_json::json!({
+                "stream": true,
+                "input": [{
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": prompt}]
+                }]
+            })))
+            .with_status(200)
+            .with_header("content-type", "text/event-stream")
+            .with_body(sse)
+            .create();
+
+        let auth = CodexAuth {
+            tokens: Some(CodexTokens {
+                access_token: "tok".into(),
+                refresh_token: None,
+                id_token: None,
+                account_id: None,
+            }),
+            last_refresh: None,
+            openai_api_key: None,
+        };
+        let url = format!("{}/codex/responses", server.url());
+        let out = consult_at(&url, &auth, "gpt-5.6-luna", prompt, None).expect("mocked consult");
+        assert_eq!(out.text, "2 + 2 equals 4.");
+        mock.assert();
+    }
+
+    fn mock_codex_sse(text: &str) -> String {
+        let created = serde_json::json!({
+            "type": "response.created",
+            "response": {"id": "resp_test", "status": "in_progress", "output": []}
+        });
+        let delta = serde_json::json!({
+            "type": "response.output_text.delta",
+            "delta": text
+        });
+        let item = serde_json::json!({
+            "type": "response.output_item.done",
+            "item": {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": text}]
+            }
+        });
+        let completed = serde_json::json!({
+            "type": "response.completed",
+            "response": {
+                "id": "resp_test",
+                "status": "completed",
+                "output_text": text,
+                "output": [{
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": text}]
+                }]
+            }
+        });
+        format!(
+            "event: response.created\ndata: {created}\n\n\
+event: response.output_text.delta\ndata: {delta}\n\n\
+event: response.output_item.done\ndata: {item}\n\n\
+event: response.completed\ndata: {completed}\n\n\
+data: [DONE]\n\n"
+        )
     }
 }

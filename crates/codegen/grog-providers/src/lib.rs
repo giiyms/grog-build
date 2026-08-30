@@ -450,6 +450,10 @@ mod tests {
             "live Codex 400: Input must be a list"
         );
         assert_eq!(body["input"][0]["type"], "message");
+        assert_eq!(
+            body["stream"], true,
+            "live Codex 400: Stream must be set to true"
+        );
         assert_eq!(grog_codex::ORIGINATOR, "grog");
     }
 }
