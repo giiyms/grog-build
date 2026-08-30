@@ -1146,6 +1146,80 @@ fn slash_restart_cancels_in_flight_turn() {
     assert!(app.relaunch.as_ref().is_some_and(|r| r.restart));
 }
 #[test]
+fn slash_update_dispatches_update_grog_effect() {
+    let mut app = test_app_with_agent();
+    let effects = dispatch(Action::SendPrompt("/update".into()), &mut app);
+    assert!(
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::UpdateGrog { .. })),
+        "expected UpdateGrog effect, got: {effects:?}"
+    );
+    assert!(
+        effects.iter().all(|e| !matches!(e, Effect::Quit)),
+        "/update must not quit until the download finishes, got: {effects:?}"
+    );
+}
+#[test]
+fn slash_upgrade_alias_dispatches_update_grog() {
+    let mut app = test_app_with_agent();
+    let effects = dispatch(Action::SendPrompt("/upgrade".into()), &mut app);
+    assert!(
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::UpdateGrog { .. }))
+    );
+}
+#[test]
+fn grog_update_finished_installed_restarts_on_new_bin() {
+    let mut app = test_app_with_agent();
+    let bin = std::path::PathBuf::from("/tmp/fake-grog-home/bin/grog");
+    let effects = dispatch(
+        Action::TaskComplete(TaskResult::GrogUpdateFinished {
+            outcome: Ok(grog_update::UpdateOutcome::Installed {
+                version: "1.0.9".into(),
+                digest: "abc".into(),
+                path: std::path::PathBuf::from(
+                    "/tmp/fake-grog-home/downloads/grog-1.0.9-macos-aarch64",
+                ),
+                bin_link: bin.clone(),
+                user_link: None,
+            }),
+            session_id: Some("test-session".into()),
+        }),
+        &mut app,
+    );
+    assert!(effects.last().is_some_and(|e| matches!(e, Effect::Quit)));
+    let relaunch = app.relaunch.expect("/update install must arm restart");
+    assert!(relaunch.restart);
+    assert_eq!(relaunch.session_id, "test-session");
+    assert_eq!(relaunch.exe.as_deref(), Some(bin.as_path()));
+    assert!(
+        !relaunch
+            .exe
+            .as_ref()
+            .is_some_and(|p| p.components().any(|c| c.as_os_str() == ".grok")),
+        "restart exe must not be under ~/.grok"
+    );
+}
+#[test]
+fn grog_update_finished_already_current_does_not_restart() {
+    let mut app = test_app_with_agent();
+    let effects = dispatch(
+        Action::TaskComplete(TaskResult::GrogUpdateFinished {
+            outcome: Ok(grog_update::UpdateOutcome::AlreadyCurrent {
+                version: "1.0.9".into(),
+                digest: "abc".into(),
+                path: std::path::PathBuf::from("/tmp/grog"),
+            }),
+            session_id: Some("test-session".into()),
+        }),
+        &mut app,
+    );
+    assert!(effects.is_empty());
+    assert!(app.relaunch.is_none());
+}
+#[test]
 fn slash_new_does_not_cancel_running_turn() {
     let mut app = test_app_with_agent();
     let id = AgentId(0);

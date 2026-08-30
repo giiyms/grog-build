@@ -4892,6 +4892,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "grog-update"
+version = "0.1.0"
+dependencies = [
+ "dirs 5.0.1",
+ "mockito",
+ "reqwest 0.12.24",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "xai-grok-extra-ca",
+ "xai-grok-version",
+]
+
+[[package]]
 name = "group"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13816,7 +13833,7 @@ dependencies = [
 
 [[package]]
 name = "xai-grok-pager"
-version = "1.0.8"
+version = "1.0.9"
 dependencies = [
  "agent-client-protocol",
  "ansi-to-tui",
@@ -13837,6 +13854,7 @@ dependencies = [
  "flate2",
  "git2",
  "grog-advisor",
+ "grog-update",
  "image",
  "indexmap",
  "insta",
@@ -13911,13 +13929,14 @@ dependencies = [
 
 [[package]]
 name = "xai-grok-pager-bin"
-version = "1.0.8"
+version = "1.0.9"
 dependencies = [
  "anyhow",
  "clap",
  "cryptify",
  "dunce",
  "grog-providers",
+ "grog-update",
  "libc",
  "obfstr",
  "semver",
@@ -14228,7 +14247,7 @@ dependencies = [
 
 [[package]]
 name = "xai-grok-shell"
-version = "1.0.8"
+version = "1.0.9"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -14667,7 +14686,7 @@ dependencies = [
 
 [[package]]
 name = "xai-grok-version"
-version = "1.0.8"
+version = "1.0.9"
 dependencies = [
  "semver",
 ]

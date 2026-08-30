@@ -280,7 +280,19 @@ pub(crate) fn pager_relaunch_plan(
     session_id: &str,
     mode: super::ScreenMode,
 ) -> io::Result<(PathBuf, Vec<OsString>)> {
-    let exe = current_pager_exe()?;
+    pager_relaunch_plan_with_exe(session_id, mode, None)
+}
+
+/// Like [`pager_relaunch_plan`], but exec `exe_override` when set (post `/update`).
+pub(crate) fn pager_relaunch_plan_with_exe(
+    session_id: &str,
+    mode: super::ScreenMode,
+    exe_override: Option<PathBuf>,
+) -> io::Result<(PathBuf, Vec<OsString>)> {
+    let exe = match exe_override {
+        Some(path) => path,
+        None => current_pager_exe()?,
+    };
     let args = build_session_relaunch_args(std::env::args_os(), session_id, mode);
     Ok((exe, args))
 }
@@ -300,6 +312,7 @@ pub(crate) fn exec_screen_mode_relaunch(session_id: &str, want_minimal: bool) ->
             super::ScreenMode::Fullscreen
         },
         false,
+        None,
     )
 }
 
@@ -308,8 +321,9 @@ pub(crate) fn exec_pager_relaunch(
     session_id: &str,
     mode: super::ScreenMode,
     restart: bool,
+    exe_override: Option<PathBuf>,
 ) -> io::Result<()> {
-    let (exe, args) = pager_relaunch_plan(session_id, mode)?;
+    let (exe, args) = pager_relaunch_plan_with_exe(session_id, mode, exe_override)?;
 
     let mut cmd = std::process::Command::new(&exe);
     cmd.args(&args);
@@ -979,6 +993,21 @@ mod tests {
             vec!["--no-alt-screen", "--no-leader", "--resume", "sid"]
         );
         assert!(!strs.iter().any(|s| s == "--fullscreen" || s == "--minimal"));
+    }
+
+    #[test]
+    fn relaunch_plan_override_uses_grog_bin_not_grok() {
+        let (exe, _) = pager_relaunch_plan_with_exe(
+            "sid-1",
+            super::super::ScreenMode::Fullscreen,
+            Some(PathBuf::from("/tmp/.grog/bin/grog")),
+        )
+        .expect("plan");
+        assert_eq!(exe, PathBuf::from("/tmp/.grog/bin/grog"));
+        assert!(
+            !exe.components().any(|c| c.as_os_str() == ".grok"),
+            "override must not be ~/.grok, got {exe:?}"
+        );
     }
 
     #[test]

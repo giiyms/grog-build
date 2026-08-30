@@ -78,6 +78,19 @@ jobs:
           # Darwin job does not also fetch unused linux-gnu std.
           echo "RUSTUP_TOOLCHAIN=${{ steps.toolchain.outputs.channel }}" >> "$GITHUB_ENV"
 
+      # Cargo registry/git + target dir. Key includes the rustc version (from
+      # rust-toolchain.toml via dtolnay/rust-toolchain) and a hash of the
+      # lockfile / workspace manifests, so a toolchain or Cargo.lock bump
+      # misses and rebuilds. PRs restore the main cache; only main saves, so
+      # PR noise does not evict the macos-14 hit that later main builds need.
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+          shared-key: grog-macos-aarch64
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Read grog version
         id: meta
         run: |
@@ -88,6 +101,8 @@ jobs:
           echo "artifact=grog-${version}-macos-aarch64" >> "$GITHUB_OUTPUT"
 
       - name: Build grog (release)
+        env:
+          GROK_VERSION: ${{ steps.meta.outputs.version }}
         run: cargo build -p xai-grok-pager-bin --release --bin grog
 
       - name: Stage artifact
@@ -120,28 +135,52 @@ jobs:
             dist/${{ steps.meta.outputs.artifact }}.sha256
           if-no-files-found: error
 
-      - name: Attach to GitHub Release
+      - name: Attach to GitHub Releases
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: grog-macos-aarch64
+          ROLLING_TAG: grog-macos-aarch64
           ASSET: ${{ steps.stage.outputs.path }}
           VERSION: ${{ steps.meta.outputs.version }}
+          VERSION_TAG: v${{ steps.meta.outputs.version }}
         run: |
           set -euo pipefail
-          notes="$(printf '%s\n' \
+          notes_common="$(printf '%s\n' \
             'Native macOS arm64 grog from giiyms/grog-build (this fork). Not official xAI grok; do not replace ~/.grok/bin/grok.' \
             '' \
             "Version: ${VERSION}" \
             "Commit: ${GITHUB_SHA}" \
             'Runner: macos-14 (Darwin aarch64)' \
             '' \
-            "chmod +x grog-${VERSION}-macos-aarch64 && mv grog-${VERSION}-macos-aarch64 ~/.local/bin/grog")"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release delete "$TAG" --yes --cleanup-tag
+            'The Mac is download-only: do not cargo-compile grog there.' \
+            'Install: grog update' \
+            "Or: chmod +x grog-${VERSION}-macos-aarch64 && place it at ~/.grog/downloads/grog-${VERSION}-macos-aarch64 with symlinks ~/.grog/bin/grog and ~/.local/bin/grog")"
+
+          # Stable-named copy so the rolling tag has a constant asset URL as well
+          # as the versioned filename grog update prefers.
+          stable="dist/grog-macos-aarch64"
+          cp "$ASSET" "$stable"
+          shasum -a 256 "$stable" | tee "${stable}.sha256"
+
+          # Rolling pointer: always refresh so `grog update` has one API URL
+          # (GET .../releases/tags/grog-macos-aarch64). Same-version commits
+          # on main still land here; versioned tags below are history.
+          if gh release view "$ROLLING_TAG" >/dev/null 2>&1; then
+            gh release delete "$ROLLING_TAG" --yes --cleanup-tag
           fi
-          gh release create "$TAG" "$ASSET" "${ASSET}.sha256" \
+          gh release create "$ROLLING_TAG" "$ASSET" "${ASSET}.sha256" "$stable" "${stable}.sha256" \
             --target "$GITHUB_SHA" \
-            --title "grog ${VERSION} (macOS aarch64)" \
-            --notes "$notes" \
+            --title "grog ${VERSION} (macOS aarch64, rolling)" \
+            --notes "$notes_common" \
             --prerelease
+
+          # Numbered history: create vX.Y.Z once when Cargo.toml version is new.
+          # Do not recreate on later main pushes of the same version.
+          if gh release view "$VERSION_TAG" >/dev/null 2>&1; then
+            echo "Version tag ${VERSION_TAG} already exists; not recreating."
+          else
+            gh release create "$VERSION_TAG" "$ASSET" "${ASSET}.sha256" \
+              --target "$GITHUB_SHA" \
+              --title "grog ${VERSION}" \
+              --notes "$notes_common"
+          fi

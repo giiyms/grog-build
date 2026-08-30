@@ -605,6 +605,9 @@ pub struct ScreenModeRelaunch {
     pub(crate) mode: ScreenMode,
     /// `/restart` (same mode, "Restarting grog…") vs a screen-mode switch.
     pub(crate) restart: bool,
+    /// After `/update`, exec the newly linked `~/.grog/bin/grog` instead of
+    /// this process's old download path. Never `~/.grok/bin/grok`.
+    pub exe: Option<std::path::PathBuf>,
 }
 /// A consented `/feedback` trace upload deferred until the coding-data
 /// sharing opt-in write claimed at `seq` resolves.

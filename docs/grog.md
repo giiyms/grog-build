@@ -140,11 +140,13 @@ Change:
    symlink for one release if local muscle memory matters.
 4. Terminal title, `/help` about-text, version string: `grog`.
    `grog --version` prints `grog <version> (<commit>)`, not `grok …`.
-5. **No x.ai/cli updater.** Grog is from-source. It must not show Grok Build
-   “updated” / “update available” chrome, must not check x.ai/cli artifacts,
-   and must not advertise grok upgrades. Official `grok` at `~/.grok` is a
-   different binary and stays out of scope. `grog update` explains the
-   from-source rebuild path instead of installing grok.
+5. **No x.ai/cli updater.** Grog must not show Grok Build “updated” /
+   “update available” chrome, must not check x.ai/cli artifacts, and must
+   not advertise grok upgrades. Official `grok` at `~/.grok` is a different
+   binary and stays out of scope. `grog update` and `/update` download this
+   fork’s Darwin aarch64 binary from GitHub Releases into `~/.grog`
+   (never `~/.grok`). The Mac is download-only — do not `cargo` compile grog
+   there.
 
 Ship path is the GitHub-hosted macOS arm64 binary from Actions (workflow
 `grog macOS aarch64` on `main`, or **Run workflow**), not a local `cargo`
@@ -588,13 +590,18 @@ Work in this order so each slice is usable alone:
 The model picker (`Ctrl+M`) groups by provider. Unavailable providers stay
 visible but disabled, with the doctor reason.
 
-### `/restart` and the exit resume hint
+### `/restart`, `/update`, and the exit resume hint
 
 `/restart` quits grog and immediately reopens **this** session: same binary
 (the running process, never `~/.grok/bin/grok`), same cwd, same
 conversation via the existing `--resume <session-id>` path (the log under
 `$GROG_HOME` / `~/.grog`, not a second store). After reopen you are back in
 the same scrollback and workspace; the session's saved model is restored.
+
+`/update` (alias `/upgrade`) runs the same fetch/install as `grog update`,
+then restarts like `/restart` onto the new `~/.grog/bin/grog` symlink. If
+the published checksum already matches the installed binary, it says so and
+does not restart.
 
 If an agent turn is in flight, `/restart` **cancels it** (same as Esc) so
 tool children are reaped before the TTY is handed to the new process. It

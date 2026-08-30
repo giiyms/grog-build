@@ -74,19 +74,20 @@ use super::session::load::{
 use super::session::modal::{dispatch_rename_session, dispatch_reset_session_title};
 use super::settings::setters::{
     clear_advisor_model, clear_default_model, clear_fork_secondary_model, preview_auto_dark_theme,
-    preview_auto_light_theme, preview_theme, set_advisor_model, set_ask_user_question_timeout_enabled,
-    set_auto_dark_theme, set_auto_light_theme, set_auto_update, set_collapsed_edit_blocks,
-    set_combine_queued_prompts, set_compact_mode, set_confirm_before_rewind,
-    set_contextual_hint_image_input, set_contextual_hint_plan_mode, set_contextual_hint_send_now,
-    set_contextual_hint_small_screen, set_contextual_hint_ssh_wrap, set_contextual_hint_undo,
-    set_contextual_hint_word_select, set_default_model, set_default_selected_permission,
-    set_display_refresh_auto_cadence, set_follow_up_behavior, set_fork_secondary_model,
-    set_group_tool_verbs, set_hunk_tracker_mode, set_invert_scroll, set_keep_text_selection,
-    set_max_thoughts_width, set_multiline_mode, set_page_flip_on_send, set_prompt_suggestions,
-    set_remember_tool_approvals, set_render_mermaid, set_respect_manual_folds, set_screen_mode,
-    set_scroll_lines, set_scroll_mode, set_scroll_speed, set_show_thinking_blocks, set_show_tips,
-    set_simple_mode, set_theme, set_timeline, set_timestamps, set_vim_mode, set_voice_capture_mode,
-    set_voice_keybind_enabled, set_voice_stt_language,
+    preview_auto_light_theme, preview_theme, set_advisor_model,
+    set_ask_user_question_timeout_enabled, set_auto_dark_theme, set_auto_light_theme,
+    set_auto_update, set_collapsed_edit_blocks, set_combine_queued_prompts, set_compact_mode,
+    set_confirm_before_rewind, set_contextual_hint_image_input, set_contextual_hint_plan_mode,
+    set_contextual_hint_send_now, set_contextual_hint_small_screen, set_contextual_hint_ssh_wrap,
+    set_contextual_hint_undo, set_contextual_hint_word_select, set_default_model,
+    set_default_selected_permission, set_display_refresh_auto_cadence, set_follow_up_behavior,
+    set_fork_secondary_model, set_group_tool_verbs, set_hunk_tracker_mode, set_invert_scroll,
+    set_keep_text_selection, set_max_thoughts_width, set_multiline_mode, set_page_flip_on_send,
+    set_prompt_suggestions, set_remember_tool_approvals, set_render_mermaid,
+    set_respect_manual_folds, set_screen_mode, set_scroll_lines, set_scroll_mode, set_scroll_speed,
+    set_show_thinking_blocks, set_show_tips, set_simple_mode, set_theme, set_timeline,
+    set_timestamps, set_vim_mode, set_voice_capture_mode, set_voice_keybind_enabled,
+    set_voice_stt_language,
 };
 use super::settings::ui::{
     dispatch_advisor_set_and_enable, dispatch_confirm_reset_setting, dispatch_open_command_palette,
@@ -199,29 +200,19 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
                         crate::app::ScreenMode::Fullscreen
                     },
                     restart: false,
+                    exe: None,
                 });
             }
             let mut effects = unregister_all_active_sessions(app);
             effects.push(Effect::Quit);
             effects
         }
-        Action::RestartProcess => {
-            let Some(session_id) = app.active_session_id().map(str::to_owned) else {
-                app.show_toast("No active session to restart");
-                return vec![];
-            };
-            app.relaunch = Some(crate::app::app_view::ScreenModeRelaunch {
-                session_id,
-                mode: app.screen_mode,
-                restart: true,
-            });
-            // Cancel an in-flight turn (if any) so tool children are asked to
-            // stop before TTY restore. Teardown still `kill_all`s; we do
-            // not wait for the model. Resume is the last flushed checkpoint.
-            let mut effects = do_cancel_turn(app, true);
-            effects.extend(unregister_all_active_sessions(app));
-            effects.push(Effect::Quit);
-            effects
+        Action::RestartProcess => arm_grog_restart(app, None),
+        Action::UpdateGrog => {
+            app.show_toast("Updating grog…");
+            vec![Effect::UpdateGrog {
+                session_id: app.active_session_id().map(str::to_owned),
+            }]
         }
         Action::NewSession => dispatch_new_session(app),
         #[cfg(feature = "local-workspace")]
@@ -1664,4 +1655,27 @@ pub(super) fn dispatch_action_result(
             }
         },
     }
+}
+
+/// Quit and re-exec grog onto the active session. `exe` is the binary to
+/// exec after `/update` (the new `~/.grog/bin/grog` symlink); `/restart`
+/// passes `None` so we keep this process's path.
+pub(super) fn arm_grog_restart(app: &mut AppView, exe: Option<std::path::PathBuf>) -> Vec<Effect> {
+    let Some(session_id) = app.active_session_id().map(str::to_owned) else {
+        app.show_toast("No active session to restart");
+        return vec![];
+    };
+    app.relaunch = Some(crate::app::app_view::ScreenModeRelaunch {
+        session_id,
+        mode: app.screen_mode,
+        restart: true,
+        exe,
+    });
+    // Cancel an in-flight turn (if any) so tool children are asked to
+    // stop before TTY restore. Teardown still `kill_all`s; we do
+    // not wait for the model. Resume is the last flushed checkpoint.
+    let mut effects = do_cancel_turn(app, true);
+    effects.extend(unregister_all_active_sessions(app));
+    effects.push(Effect::Quit);
+    effects
 }

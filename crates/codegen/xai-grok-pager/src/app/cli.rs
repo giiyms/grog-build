@@ -92,12 +92,8 @@ See ~/.grok/README.md for more information.
     Export(crate::export_cmd::ExportArgs),
     /// Export or upload session trace data
     Trace(crate::trace_cmd::TraceArgs),
-    /// Check for updates or install a specific version
-    ///
-    /// Hidden on grog: this fork does not use the x.ai/cli updater. The
-    /// subcommand still exists so `grog update` can print that copy instead
-    /// of silently hitting grok artifact URLs.
-    #[command(hide = true)]
+    /// Download the latest Darwin aarch64 grog from this fork's GitHub
+    /// Releases into `~/.grog` (never `~/.grok`).
     Update {
         /// Check for updates without installing.
         #[arg(long)]
@@ -108,14 +104,14 @@ See ~/.grok/README.md for more information.
         /// Force re-download and install even if already up to date.
         #[arg(long)]
         force_reinstall: bool,
-        /// Install a specific version (e.g. 0.1.150 or 0.1.151-alpha.2).
+        /// Install a specific versioned release (e.g. 1.0.9 or v1.0.9).
         #[arg(long)]
         version: Option<String>,
-        /// Switch to the alpha release channel (faster updates, may have bugs).
-        #[arg(long, conflicts_with_all = ["stable", "enterprise"])]
+        /// Switch to the alpha release channel (x.ai/cli; unused on grog).
+        #[arg(long, conflicts_with_all = ["stable", "enterprise"], hide = true)]
         alpha: bool,
-        /// Switch to the stable release channel (default, weekly releases).
-        #[arg(long, conflicts_with_all = ["alpha", "enterprise"])]
+        /// Switch to the stable release channel (x.ai/cli; unused on grog).
+        #[arg(long, conflicts_with_all = ["alpha", "enterprise"], hide = true)]
         stable: bool,
         /// Switch to the enterprise release channel.
         #[arg(long, conflicts_with_all = ["alpha", "stable"], hide = true)]

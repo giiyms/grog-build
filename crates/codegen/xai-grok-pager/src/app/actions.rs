@@ -50,6 +50,9 @@ pub enum Action {
     },
     /// Quit and re-exec this grog binary onto the active session.
     RestartProcess,
+    /// Fetch the latest Darwin aarch64 grog from GitHub Releases, then
+    /// restart like [`Self::RestartProcess`] when install succeeds.
+    UpdateGrog,
     /// Quit without double-press confirmation (e.g., from command palette or pre-login screens).
     QuitConfirmed,
     /// Create a new session from the welcome screen.
@@ -1213,11 +1216,7 @@ impl PlanModeKind {
     }
     /// Construct from a bool (the inverse of [`Self::to_bool`]).
     pub fn from_bool(b: bool) -> Self {
-        if b {
-            Self::On
-        } else {
-            Self::Off
-        }
+        if b { Self::On } else { Self::Off }
     }
 }
 /// What user gesture triggered a turn cancel; sent as `session/cancel`'s
@@ -2266,6 +2265,8 @@ pub enum Effect {
         target: DoctorFixTarget,
         plan: Box<crate::diagnostics::FixPlan>,
     },
+    /// Download grog from this fork's GitHub Releases into `~/.grog`.
+    UpdateGrog { session_id: Option<String> },
 }
 /// Wire params for `x.ai/session/rename`. Shared with the effect executor
 /// so dispatch tests can pin the exact camelCase payload.
@@ -3104,6 +3105,11 @@ pub enum TaskResult {
     DoctorFixApplied {
         target: DoctorFixTarget,
         result: Result<crate::diagnostics::FixOutcome, String>,
+    },
+    /// `grog update` / `/update` finished (install or no-op).
+    GrogUpdateFinished {
+        outcome: Result<grog_update::UpdateOutcome, String>,
+        session_id: Option<String>,
     },
 }
 #[cfg(test)]

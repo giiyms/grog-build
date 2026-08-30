@@ -2415,18 +2415,10 @@ fn build_update_config() -> UpdateConfig {
 }
 /// Grog is a from-source fork. It must not check x.ai/cli artifacts or
 /// advertise grok upgrades. Official `grok` (`~/.grok/bin/grok`) is a
-/// different binary and is out of scope.
+/// different binary and is out of scope. `grog update` uses GitHub Releases
+/// instead (see `grog-update`).
 fn grog_skips_xai_cli_updater() -> bool {
     true
-}
-
-/// Human-readable copy for `grog update` / `--check`. Never tells the
-/// user that a grok upgrade is available.
-fn grog_update_unavailable_message() -> &'static str {
-    "grog is a from-source fork and does not use the x.ai/cli updater.\n\
-     Official grok (typically ~/.grok/bin/grok) is a separate binary.\n\
-     To update grog, rebuild from source:\n\
-     cargo build -p xai-grok-pager-bin --release"
 }
 
 /// Central gate for auto-update checks; add new suppression rules here,
@@ -2501,78 +2493,78 @@ fn resolve_update_trigger(flag: Option<&str>, auto: bool) -> auto_update::CliUpd
         auto_update::CliUpdateTrigger::UserCommand
     }
 }
+/// `grog update` downloads this fork's Darwin aarch64 binary from GitHub
+/// Releases. Official grok (`~/.grok`) is out of scope; this never calls
+/// x.ai/cli.
 async fn run_update_command(
     check: bool,
     json: bool,
     force_reinstall: bool,
     version: Option<String>,
     channel_switch: Option<&str>,
-    trigger: auto_update::CliUpdateTrigger,
-    base_update_config: &UpdateConfig,
+    _trigger: auto_update::CliUpdateTrigger,
+    _base_update_config: &UpdateConfig,
 ) -> Result<()> {
-    if grog_skips_xai_cli_updater() {
-        if json {
-            if !check {
-                anyhow::bail!("--json requires --check");
-            }
-            println!(
-                "{}",
-                serde_json::json!({
-                    "name": xai_grok_version::PRODUCT_CLI_NAME,
-                    "update_available": false,
-                    "reason": "grog is a from-source fork and does not use the x.ai/cli updater",
-                })
-            );
-            return Ok(());
-        }
-        println!("{}", grog_update_unavailable_message());
-        return Ok(());
-    }
     if json && !check {
         anyhow::bail!("--json requires --check");
     }
-    let mut update_config = base_update_config.clone();
-    if check {
-        if version.is_some() {
-            anyhow::bail!("--version cannot be used with --check");
-        }
-        auto_update::apply_channel_switch(channel_switch, &mut update_config).await;
-        let status = auto_update::check_update_status(&update_config).await;
-        auto_update::print_update_status(&status, json)?;
-        return Ok(());
-    }
-    if let Some(ref v) = version
-        && semver::Version::parse(v).is_err()
-    {
-        anyhow::bail!(
-            "'{}' is not a valid version. Expected semver like 0.1.150",
-            v
+    if let Some(ch) = channel_switch {
+        eprintln!(
+            "grog update: ignoring --{ch} (grog is not on the x.ai/cli channels; \
+             it uses GitHub Releases from giiyms/grog-build)."
         );
     }
-    let telemetry_cfg = xai_grok_shell::config::load_agent_config_disk_only()
-        .map_err(|e| tracing::warn!("grok update: telemetry init skipped (agent config: {e})"))
-        .ok();
-    if let Some(agent_cfg) = telemetry_cfg {
-        let auth_manager = std::sync::Arc::new(xai_grok_shell::auth::AuthManager::new(
-            &xai_grok_shell::util::grok_home::grok_home(),
-            agent_cfg.grok_com_config.clone(),
-        ));
-        xai_grok_shell::agent::init::update_telemetry_config(&agent_cfg, &auth_manager);
+    if check && version.is_some() {
+        anyhow::bail!("--version cannot be used with --check");
     }
-    let result = auto_update::run_update(
-        force_reinstall,
-        version.as_deref(),
-        channel_switch,
-        &mut update_config,
-        trigger,
-    )
-    .await;
-    if let Ok(Some(installed_version)) = &result {
-        signal_leaders_to_relaunch(installed_version).await;
+    let opts = grog_update::UpdateOptions {
+        force: force_reinstall,
+        check_only: check,
+        version,
+        skip_platform_check: grog_update::skip_platform_from_env(),
+        ..grog_update::UpdateOptions::default()
+    };
+    let outcome = grog_update::run_update(&opts)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    if json {
+        match &outcome {
+            grog_update::UpdateOutcome::Available { status } => {
+                println!("{}", grog_update::check_status_json(status)?);
+            }
+            grog_update::UpdateOutcome::AlreadyCurrent {
+                version, digest, ..
+            } => {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "name": grog_update::PRODUCT_CLI_NAME,
+                        "currentVersion": grog_update::running_version(),
+                        "latestVersion": version,
+                        "updateAvailable": false,
+                        "digest": digest,
+                    })
+                );
+            }
+            grog_update::UpdateOutcome::Installed {
+                version, digest, ..
+            } => {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "name": grog_update::PRODUCT_CLI_NAME,
+                        "currentVersion": version,
+                        "latestVersion": version,
+                        "updateAvailable": false,
+                        "installed": true,
+                        "digest": digest,
+                    })
+                );
+            }
+        }
+        return Ok(());
     }
-    xai_grok_telemetry::session_ctx::drain_pending(xai_grok_telemetry::session_ctx::CLI_DRAIN)
-        .await;
-    result?;
+    println!("{}", outcome.cli_message());
     Ok(())
 }
 /// After a successful `grok update`, ask any running leader on this machine that
@@ -2582,6 +2574,9 @@ async fn run_update_command(
 /// Best-effort and non-fatal: discovery/connect/control failures are logged and
 /// skipped. The leader re-checks the directional version guard authoritatively;
 /// the pager-side `live_info` check just avoids connecting to newer leaders.
+///
+/// Unused on grog (GitHub Releases install does not signal xAI leaders).
+#[allow(dead_code)]
 async fn signal_leaders_to_relaunch(installed_version: &str) {
     for d in xai_grok_shell::leader::discover_leaders().await {
         if d.classification != xai_grok_shell::leader::LeaderDiscoveryState::Reachable {
@@ -2960,11 +2955,6 @@ mod tests {
             "grog must not probe x.ai/cli even without --no-auto-update"
         );
         assert!(!should_check_for_updates(true));
-        let msg = grog_update_unavailable_message();
-        assert!(msg.contains("from-source"));
-        assert!(msg.contains("x.ai/cli"));
-        assert!(!msg.contains("A new version of Grok"));
-        assert!(!msg.contains("Grok Build is available"));
     }
     use clap::Parser as _;
     /// `grok dashboard` flags the startup hook without forcing leader mode —
