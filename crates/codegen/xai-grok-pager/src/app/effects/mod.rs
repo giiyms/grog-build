@@ -1951,6 +1951,18 @@ pub(crate) fn execute(
                     }
                 });
         }
+        Effect::UpdateGrog { session_id } => {
+            tasks
+                .spawn(async move {
+                    let outcome = grog_update::run_update(&grog_update::UpdateOptions::default())
+                        .await
+                        .map_err(|error| error.to_string());
+                    TaskResult::GrogUpdateFinished {
+                        outcome,
+                        session_id,
+                    }
+                });
+        }
         Effect::FetchChangelog => {
             tasks
                 .spawn(async move {

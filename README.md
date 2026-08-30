@@ -40,8 +40,9 @@ for the version of the code present in this tree.
 > Launch with `grog`. Providers: Claude Code CLI, ChatGPT Codex OAuth, Google
 > `agy`, optional xAI. Council: `/council`. Docs: [docs/grog.md](docs/grog.md),
 > [docs/UPSTREAM.md](docs/UPSTREAM.md) (how to rebase onto the next monorepo dump).
-> macOS arm64 binary: GitHub Actions artifact / prerelease `grog-macos-aarch64`
-> (not official xAI `grok`; do not compile grog on a disk-constrained Mac).
+> macOS arm64 binary: GitHub Actions artifact / rolling prerelease
+> `grog-macos-aarch64` plus versioned `vX.Y.Z` releases (not official xAI
+> `grok`; the Mac is download-only — `grog update`, do not compile grog there).
 
 ---
 

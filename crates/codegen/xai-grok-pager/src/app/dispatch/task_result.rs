@@ -1480,5 +1480,40 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             app.show_toast(&format!("\u{2717} Could not save {key}: {scrubbed}"));
             vec![]
         }
+        TaskResult::GrogUpdateFinished {
+            outcome,
+            session_id,
+        } => match outcome {
+            Ok(grog_update::UpdateOutcome::AlreadyCurrent { version, .. }) => {
+                app.show_toast(&format!("grog is already up to date ({version})."));
+                vec![]
+            }
+            Ok(grog_update::UpdateOutcome::Available { status }) => {
+                let msg = if status.update_available {
+                    format!(
+                        "grog {} is available (installed {}).",
+                        status.latest_version, status.current_version
+                    )
+                } else {
+                    format!("grog is already up to date ({}).", status.current_version)
+                };
+                app.show_toast(&msg);
+                vec![]
+            }
+            Ok(grog_update::UpdateOutcome::Installed {
+                version, bin_link, ..
+            }) => {
+                app.show_toast(&format!("Installed grog {version}. Restarting…"));
+                if session_id.is_some() {
+                    super::router::arm_grog_restart(app, Some(bin_link))
+                } else {
+                    vec![]
+                }
+            }
+            Err(error) => {
+                app.show_toast(&format!("grog update failed: {error}"));
+                vec![]
+            }
+        },
     }
 }

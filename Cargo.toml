@@ -12,6 +12,7 @@ members = [
     "crates/codegen/grog-claude-bridge",
     "crates/codegen/grog-codex",
     "crates/codegen/grog-providers",
+    "crates/codegen/grog-update",
     "crates/codegen/ptyctl",
     "crates/codegen/ptyctl-cli",
     "crates/codegen/xai-acp-lib",

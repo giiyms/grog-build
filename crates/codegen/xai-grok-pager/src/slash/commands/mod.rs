@@ -3,10 +3,10 @@
 //! Each command lives in its own submodule. This module re-exports
 //! command structs and provides `builtin_commands()` for registry
 //! construction.
+pub mod advisor;
 pub mod always_approve;
 pub mod announcements;
 pub mod auto;
-pub mod advisor;
 pub mod btw;
 pub mod cd;
 pub mod compact;
@@ -52,8 +52,8 @@ pub mod recap;
 pub mod release_notes;
 pub mod remember;
 pub mod rename;
-pub mod resume;
 pub mod restart;
+pub mod resume;
 pub mod rewind;
 pub mod screen_mode_switch;
 pub mod scroll_debug;
@@ -67,6 +67,7 @@ pub mod timestamps;
 pub mod toggle_mouse_reporting;
 pub mod transcript;
 pub mod tutorial;
+pub mod update;
 pub mod usage;
 pub mod view_plan;
 pub mod vim_mode;
@@ -98,6 +99,7 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(fork::ForkCommand),
         Arc::new(resume::ResumeCommand),
         Arc::new(restart::RestartCommand),
+        Arc::new(update::UpdateCommand),
         // Steering the work in front of you.
         Arc::new(loop_cmd::LoopCommand),
         Arc::new(plan::PlanCommand),
@@ -224,7 +226,10 @@ mod tests {
         assert!(reg.get("new").is_some());
         assert!(reg.get("compact").is_some());
         assert!(reg.get("model").is_some());
-        assert!(reg.get("advisor").is_some(), "/advisor should be registered");
+        assert!(
+            reg.get("advisor").is_some(),
+            "/advisor should be registered"
+        );
         assert!(reg.get("home").is_some());
         assert!(reg.get("view-plan").is_some());
         reg.set_available_tools(std::collections::HashSet::from([
@@ -319,6 +324,36 @@ mod tests {
         assert!(matches!(
             cmd.run(&mut ctx, ""),
             CommandResult::Action(Action::RestartProcess)
+        ));
+    }
+    #[test]
+    fn update_is_registered_and_names_grog() {
+        let reg = CommandRegistry::new(builtin_commands());
+        let cmd = reg.get("update").expect("/update must be registered");
+        assert_eq!(cmd.name(), "update");
+        assert_eq!(reg.get("upgrade").unwrap().name(), "update");
+        assert!(
+            cmd.description().contains("grog"),
+            "/update help must name grog, got {}",
+            cmd.description()
+        );
+        assert!(
+            !cmd.description().to_ascii_lowercase().contains("grok"),
+            "/update help must not say grok, got {}",
+            cmd.description()
+        );
+    }
+    #[test]
+    fn update_returns_update_action_with_session() {
+        let models = ModelState::default();
+        let mut ctx = make_ctx(&models);
+        let cmd = update::UpdateCommand;
+        assert!(matches!(cmd.run(&mut ctx, ""), CommandResult::Error(_)));
+        let session_id = acp::SessionId::new("sess-update");
+        ctx.session_id = Some(&session_id);
+        assert!(matches!(
+            cmd.run(&mut ctx, ""),
+            CommandResult::Action(Action::UpdateGrog)
         ));
     }
     #[test]

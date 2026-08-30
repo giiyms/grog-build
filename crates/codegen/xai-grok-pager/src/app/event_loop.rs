@@ -1008,6 +1008,7 @@ fn run_pending_mode_switch(
                     session_id,
                     mode: target,
                     restart: false,
+                    exe: None,
                 });
             }
             let effs: Vec<super::actions::Effect> = app

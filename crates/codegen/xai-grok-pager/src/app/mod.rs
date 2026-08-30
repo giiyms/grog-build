@@ -1107,6 +1107,7 @@ pub async fn run(
                     &relaunch.session_id,
                     relaunch.mode,
                     relaunch.restart,
+                    relaunch.exe.clone(),
                 ) {
                     tracing::error!(error = %e, "session relaunch failed");
                     print_relaunch_failure_hint(
