@@ -276,6 +276,17 @@ pub(super) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
         },
     },
     BuiltinCommand {
+        name: "advisor",
+        description: "Sidecar reviewer watching the live transcript",
+        argument_hint: Some("[on|off|status|model|luna|opus|sonnet|agy]"),
+        aliases: &[],
+        gate: BuiltinGate::AlwaysOn,
+        workflow_projection: WorkflowProjection::None,
+        resolve: |args| BuiltinAction::Advisor {
+            args: args.trim().to_string(),
+        },
+    },
+    BuiltinCommand {
         name: "workflow",
         description: "Launch a saved workflow, list runs, or manage a run (pause, resume, stop, save)",
         argument_hint: Some(
@@ -467,6 +478,7 @@ pub(crate) fn build_tools_meta(tool_names: &[String]) -> acp::Meta {
 pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "agents",
     "agents-dashboard",
+    "advisor",
     "always-approve",
     "announcements",
     "auto",
@@ -1306,6 +1318,9 @@ pub(super) enum BuiltinAction {
     Council {
         query: String,
     },
+    Advisor {
+        args: String,
+    },
     WorkflowManage {
         run_id: String,
         op: String,
@@ -1347,6 +1362,7 @@ impl BuiltinAction {
             | BuiltinAction::GoalClear => "goal",
             BuiltinAction::DeepResearch { .. } => "deep-research",
             BuiltinAction::Council { .. } => "council",
+            BuiltinAction::Advisor { .. } => "advisor",
             BuiltinAction::WorkflowManage { .. } => "workflow",
             BuiltinAction::WorkflowLaunch { .. } => "workflow",
         }
@@ -1382,6 +1398,7 @@ impl BuiltinAction {
             | BuiltinAction::GoalClear => false,
             BuiltinAction::DeepResearch { .. } => true,
             BuiltinAction::Council { .. } => true,
+            BuiltinAction::Advisor { args } => !args.is_empty(),
             BuiltinAction::WorkflowManage { .. } => true,
             BuiltinAction::WorkflowLaunch { input, .. } => !input.is_empty(),
         }

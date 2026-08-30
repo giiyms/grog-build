@@ -441,6 +441,18 @@ fn every_dynamic_enum_setting_has_action_for_string_arm() {
                      SetForkSecondaryModel(_), got {nonempty_action:?}",
                 );
             }
+            "advisor_model" => {
+                assert!(
+                    matches!(empty_action, Some(Action::ClearAdvisorModel)),
+                    "advisor_model empty canonical must produce ClearAdvisorModel, \
+                     got {empty_action:?}",
+                );
+                assert!(
+                    matches!(nonempty_action, Some(Action::SetAdvisorModel(_))),
+                    "advisor_model non-empty canonical must produce \
+                     SetAdvisorModel(_), got {nonempty_action:?}",
+                );
+            }
             other => panic!(
                 "Unknown DynamicEnum key `{other}` — add a discriminating arm in \
                  every_dynamic_enum_setting_has_action_for_string_arm so future \
@@ -684,6 +696,9 @@ fn rows_contain_categories_and_settings_through_pr_14() {
             "coding_data_sharing",
             // SHELL-owned default_model (Models category).
             "default_model",
+            // SHELL-owned advisor_model (Models category) — sidecar pin,
+            // not the live primary.
+            "advisor_model",
             // Models category. `default_reasoning_effort`,
             // `web_search_model`, and `session_summary_model` are
             // not exposed in the modal.

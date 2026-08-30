@@ -166,6 +166,71 @@ pub fn howto_list_modal(previous_palette: Option<PaletteSnapshot>) -> ActiveModa
         window: ModalWindowState::new(),
     }
 }
+/// Target slot for the shared model ArgPicker. Ctrl+M opens Session;
+/// `/advisor model` opens Advisor so picking Luna does not switch the
+/// live primary off Grok.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelPickerTarget {
+    Session,
+    Advisor,
+}
+
+impl ModelPickerTarget {
+    pub fn command(self) -> &'static str {
+        match self {
+            Self::Session => "model",
+            Self::Advisor => "advisor",
+        }
+    }
+
+    pub fn toggle(self) -> Self {
+        match self {
+            Self::Session => Self::Advisor,
+            Self::Advisor => Self::Session,
+        }
+    }
+
+    pub fn from_command(command: &str) -> Option<Self> {
+        match command {
+            "model" | "m" => Some(Self::Session),
+            "advisor" => Some(Self::Advisor),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod model_picker_target_tests {
+    use super::ModelPickerTarget;
+
+    #[test]
+    fn ctrl_m_stays_session_advisor_command_targets_advisor() {
+        assert_eq!(ModelPickerTarget::Session.command(), "model");
+        assert_eq!(ModelPickerTarget::Advisor.command(), "advisor");
+        assert_eq!(
+            ModelPickerTarget::from_command("model"),
+            Some(ModelPickerTarget::Session)
+        );
+        assert_eq!(
+            ModelPickerTarget::from_command("m"),
+            Some(ModelPickerTarget::Session)
+        );
+        assert_eq!(
+            ModelPickerTarget::from_command("advisor"),
+            Some(ModelPickerTarget::Advisor)
+        );
+        assert_eq!(ModelPickerTarget::from_command("theme"), None);
+        assert_eq!(
+            ModelPickerTarget::Session.toggle(),
+            ModelPickerTarget::Advisor
+        );
+        assert_eq!(
+            ModelPickerTarget::Advisor.toggle(),
+            ModelPickerTarget::Session
+        );
+    }
+}
+
 /// The currently active modal dialog, if any.
 ///
 /// Each variant wraps a `ModalConfirmation<R>` with its concrete result
@@ -686,8 +751,10 @@ impl ActiveModal {
                 args_query,
                 ..
             } => match command.as_str() {
-                "model" | "m" if !args_query.is_empty() => "Pick reasoning effort",
-                "model" | "m" => "Pick model",
+                "model" | "m" if !args_query.is_empty() => "Pick reasoning effort (session)",
+                "model" | "m" => "Pick model (session)  tab: advisor",
+                "advisor" if !args_query.is_empty() => "Pick reasoning effort (advisor)",
+                "advisor" => "Pick advisor model  tab: session",
                 "theme" | "t" => "Pick theme",
                 _ => "Pick option",
             },

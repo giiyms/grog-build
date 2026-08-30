@@ -207,6 +207,54 @@ pub async fn set_default_model(value: String) -> Result<()> {
     .await
 }
 
+/// Persist `[models].advisor`. Empty string clears the field.
+/// Length over [`MAX_DEFAULT_MODEL_LEN`] returns `Err`. Does not write an
+/// enable flag — `/advisor` on/off is session-scoped.
+pub async fn set_advisor_model(value: String) -> Result<()> {
+    if value.len() > MAX_DEFAULT_MODEL_LEN {
+        anyhow::bail!(
+            "advisor_model name too long ({} > {} bytes)",
+            value.len(),
+            MAX_DEFAULT_MODEL_LEN
+        );
+    }
+    update_config(|cfg| {
+        cfg.models.advisor = if value.trim().is_empty() {
+            None
+        } else {
+            Some(value.trim().to_string())
+        };
+    })
+    .await
+}
+
+/// Persist `[models].advisor_reasoning_effort`. `None` clears it.
+pub async fn set_advisor_reasoning_effort(
+    effort: Option<crate::sampling::types::ReasoningEffort>,
+) -> Result<()> {
+    update_config(|cfg| {
+        cfg.models.advisor_reasoning_effort = effort;
+    })
+    .await
+}
+
+/// Parse a slash effort token into [`ReasoningEffort`].
+pub fn reasoning_effort_from_token(
+    token: &str,
+) -> Option<crate::sampling::types::ReasoningEffort> {
+    use crate::sampling::types::ReasoningEffort;
+    match token.trim().to_ascii_lowercase().as_str() {
+        "none" => Some(ReasoningEffort::None),
+        "minimal" | "min" => Some(ReasoningEffort::Minimal),
+        "low" => Some(ReasoningEffort::Low),
+        "medium" | "med" => Some(ReasoningEffort::Medium),
+        "high" => Some(ReasoningEffort::High),
+        "xhigh" => Some(ReasoningEffort::Xhigh),
+        "max" => Some(ReasoningEffort::Max),
+        _ => None,
+    }
+}
+
 /// Persist `[privacy].privacy_banner_acked` (RFC 3339 UTC dismiss time).
 pub async fn set_privacy_banner_acked(acked_at_rfc3339: String) -> Result<()> {
     update_config(|cfg| {

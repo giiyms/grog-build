@@ -152,6 +152,7 @@ xai-grok-compaction = { path = "../../common/xai-grok-compaction" }
 xai-grok-extra-ca = { workspace = true }
 xai-grok-sampler = { path = "../xai-grok-sampler" }
 grog-providers = { path = "../grog-providers" }
+grog-advisor = { path = "../grog-advisor" }
 # Session FTS search; owns this crate's only rusqlite/bundled-SQLite use.
 xai-grok-session-search = { workspace = true }
 xai-token-estimation = { workspace = true }

@@ -1785,6 +1785,51 @@ fn council_projects_workflow_metadata_and_resolves() {
 }
 
 #[test]
+fn advisor_is_always_on_builtin_not_council() {
+    let commands = available_commands(&[], all_gated(), &[]);
+    let matching: Vec<_> = commands
+        .iter()
+        .filter(|command| command.name == "advisor")
+        .collect();
+    assert_eq!(matching.len(), 1, "/advisor must be advertised");
+    assert!(
+        matching[0].description.contains("Sidecar"),
+        "{}",
+        matching[0].description
+    );
+    assert!(
+        !matching[0].description.to_lowercase().contains("council"),
+        "advisor description must not say council: {}",
+        matching[0].description
+    );
+
+    assert!(matches!(
+        resolve(
+            vec![text_block("/advisor luna")],
+            &[],
+            all_gated(),
+            SkillSlashRewrite::default(),
+            &[],
+        )
+        .unwrap_err(),
+        SlashCommandOutcome::Builtin(BuiltinAction::Advisor { args })
+            if args == "luna"
+    ));
+    assert!(matches!(
+        resolve(
+            vec![text_block("/advisor")],
+            &[],
+            all_gated(),
+            SkillSlashRewrite::default(),
+            &[],
+        )
+        .unwrap_err(),
+        SlashCommandOutcome::Builtin(BuiltinAction::Advisor { args })
+            if args.is_empty()
+    ));
+}
+
+#[test]
 fn ordinary_builtin_collisions_do_not_project_workflow_metadata() {
     let mut status_workflow = listing("status");
     status_workflow.source = "project";

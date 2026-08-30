@@ -1010,6 +1010,15 @@ pub(super) fn action_for_string(
                     .map(Action::SetDefaultModel)
             }
         }
+        "advisor_model" => {
+            if value.is_empty() {
+                Some(Action::ClearAdvisorModel)
+            } else {
+                snapshot
+                    .resolve_model_name(&value)
+                    .map(Action::SetAdvisorModel)
+            }
+        }
         "fork_secondary_model" => {
             if value.is_empty() {
                 Some(Action::ClearForkSecondaryModel)

@@ -1048,6 +1048,13 @@ pub struct ModelsConfig {
     /// Persisted effort for the default model; applied in `resolve_model_catalog`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_reasoning_effort: Option<ReasoningEffort>,
+    /// Sidecar reviewer model (`/advisor`). Session enable is not persisted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub advisor: Option<String>,
+    /// Optional thinking/effort for [`Self::advisor`], parallel to
+    /// [`Self::default_reasoning_effort`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub advisor_reasoning_effort: Option<ReasoningEffort>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub web_search: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

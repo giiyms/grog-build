@@ -597,6 +597,21 @@ pub enum Action {
     /// Active session's model is unchanged; next session resolves
     /// via the shell's default-resolution chain.
     ClearDefaultModel,
+    /// Persist `[models].advisor` without switching the live primary.
+    SetAdvisorModel(acp::ModelId),
+    /// Clear `[models].advisor`. Live primary and session enable are unchanged.
+    ClearAdvisorModel,
+    /// Persist advisor model then pass `/advisor …` through so the shell
+    /// enables the sidecar. Does not switch the live primary.
+    AdvisorSetAndEnable {
+        model_id: acp::ModelId,
+        pass_through: String,
+    },
+    /// Open the shared model ArgPicker. Ctrl+M uses Session; `/advisor model`
+    /// uses Advisor so picking Luna does not move the live primary off Grok.
+    OpenModelPicker {
+        target: crate::views::modal::ModelPickerTarget,
+    },
     /// Commit the max-thoughts-width (column budget for the thoughts panel).
     /// Payload is `i64`; clamped to `u16` at the shell helper boundary.
     SetMaxThoughtsWidth(i64),

@@ -911,6 +911,13 @@ pub enum SessionCommand {
         commit: Option<String>,
         branch: Option<String>,
     },
+    /// Background `/advisor` consult finished. Failures must not kill the
+    /// primary turn.
+    AdvisorReview {
+        generation: u64,
+        output: Result<String, String>,
+        in_progress: bool,
+    },
 }
 #[cfg(test)]
 mod cancellation_category_meta_tests {

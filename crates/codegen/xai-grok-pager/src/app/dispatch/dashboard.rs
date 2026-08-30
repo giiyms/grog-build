@@ -1474,6 +1474,11 @@ pub(super) fn dispatch_dashboard_dispatch_slash(app: &mut AppView, text: String)
                 auto_mode: app.current_ui.permission_mode.as_deref() == Some("auto")
                     && !app.default_yolo,
                 current_model_name: app.models.current_model_name(),
+                advisor_model_id: if app.advisor_model.is_empty() {
+                    None
+                } else {
+                    Some(app.advisor_model.clone())
+                },
                 available_models: app
                     .models
                     .available

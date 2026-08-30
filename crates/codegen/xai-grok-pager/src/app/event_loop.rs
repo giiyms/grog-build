@@ -1660,6 +1660,7 @@ pub(crate) async fn run(
     // Seed app state from disk once at the I/O boundary so dispatch
     // stays sans-IO.
     app.current_ui = load_initial_ui_config();
+    app.advisor_model = load_initial_advisor_model();
     // Here rather than from the row's own update: that runs only once an agent
     // view is on screen, so a minimal-mode or welcome-only session would be
     // missing from the denominator adoption is measured against.
@@ -3390,6 +3391,19 @@ pub(crate) fn load_initial_ui_config() -> xai_grok_shell::agent::config::UiConfi
             ui_value.try_into::<UiConfig>().unwrap_or_default()
         })
         .clone()
+}
+
+/// `[models].advisor` as it was on disk at startup. Empty = unset.
+pub(crate) fn load_initial_advisor_model() -> String {
+    let Ok(root) = xai_grok_shell::config::load_effective_config() else {
+        return String::new();
+    };
+    root.get("models")
+        .and_then(|m| m.get("advisor"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string()
 }
 
 /// Config `Option<bool>` mirrors seeded once at startup. `None` = no

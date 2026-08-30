@@ -55,7 +55,7 @@ impl AgentView {
         else {
             return false;
         };
-        if args_query.is_empty() || !matches!(command.as_str(), "model" | "m") {
+        if args_query.is_empty() || !matches!(command.as_str(), "model" | "m" | "advisor") {
             return false;
         }
         let command = command.clone();
@@ -95,6 +95,58 @@ impl AgentView {
             *state = crate::views::picker::PickerState::input_active();
         }
         true
+    }
+
+    /// Tab in the model ArgPicker switches Session ↔ Advisor without
+    /// changing Ctrl+M's default (Session). Only when the query is empty
+    /// so type-to-filter Tab is left alone.
+    fn try_toggle_model_picker_target(&mut self) -> bool {
+        use crate::views::modal::ModelPickerTarget;
+        let Some(ActiveModal::ArgPicker {
+            command,
+            args_query,
+            state,
+            ..
+        }) = self.active_modal.as_ref()
+        else {
+            return false;
+        };
+        if !args_query.is_empty() || !state.query().is_empty() {
+            return false;
+        }
+        let Some(current) = ModelPickerTarget::from_command(command) else {
+            return false;
+        };
+        let next = current.toggle();
+        let next_command = next.command().to_string();
+        let Some(cmd) = self.prompt.slash_controller.registry().get(&next_command) else {
+            return false;
+        };
+        let ctx = self.prompt.slash_controller.app_ctx(&self.session.models);
+        let Some(items) = cmd.suggest_args(&ctx, "") else {
+            return false;
+        };
+        if items.is_empty() {
+            return false;
+        }
+        if let Some(ActiveModal::ArgPicker {
+            command,
+            args_query,
+            items: cur_items,
+            original_items,
+            state,
+            ..
+        }) = self.active_modal.as_mut()
+        {
+            *command = next_command;
+            args_query.clear();
+            *cur_items = items.clone();
+            *original_items = items;
+            *state = crate::views::picker::PickerState::input_active();
+            true
+        } else {
+            false
+        }
     }
 
     /// Handle a key press while a modal dialog is active.
@@ -580,6 +632,15 @@ impl AgentView {
     fn handle_arg_picker_input(&mut self, ev: &crossterm::event::Event) -> InputOutcome {
         use crate::views::picker::{PickerConfig, PickerOutcome, handle_picker_input};
 
+        if let crossterm::event::Event::Key(key) = ev
+            && key.kind == KeyEventKind::Press
+            && key.code == KeyCode::Tab
+            && key.modifiers.is_empty()
+            && self.try_toggle_model_picker_target()
+        {
+            return InputOutcome::Changed;
+        }
+
         enum ArgPickerStep {
             Selected(crate::slash::command::ArgItem),
             Closed,
@@ -683,7 +744,7 @@ impl AgentView {
                 InputOutcome::Changed
             }
             ArgPickerStep::Selected(item) => {
-                let chains_to_effort = matches!(command_clone.as_str(), "model" | "m")
+                let chains_to_effort = matches!(command_clone.as_str(), "model" | "m" | "advisor")
                     && item.insert_text.ends_with(char::is_whitespace);
                 if chains_to_effort {
                     let next_query = item.insert_text.clone();
@@ -1903,8 +1964,10 @@ impl AgentView {
             {
                 // Arg picker: ModalWindow chrome + picker content.
                 let title = match command.as_str() {
-                    "model" | "m" if !args_query.is_empty() => "Pick reasoning effort",
-                    "model" | "m" => "Pick model",
+                    "model" | "m" if !args_query.is_empty() => "Pick reasoning effort (session)",
+                    "model" | "m" => "Pick model (session)  tab: advisor",
+                    "advisor" if !args_query.is_empty() => "Pick reasoning effort (advisor)",
+                    "advisor" => "Pick advisor model  tab: session",
                     "theme" | "t" => "Pick theme",
                     _ => "Pick option",
                 };

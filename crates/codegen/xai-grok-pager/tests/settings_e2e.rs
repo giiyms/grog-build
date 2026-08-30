@@ -48,6 +48,7 @@ const ALL_SETTINGS_EXERCISED: &[&str] = &[
     "multiline_mode",
     "permission_mode",
     "default_model",
+    "advisor_model",
     "max_thoughts_width",
     "scroll_speed",
     "scroll_mode",
@@ -1949,14 +1950,14 @@ fn registry_kind_membership_through_pr_14() {
     let string_keys = by_kind.remove("String").unwrap_or_default();
     assert!(
         string_keys.is_empty(),
-        "no String-kind settings should remain — `default_model` + `fork_secondary_model` \
-         migrated to DynamicEnum; got: {string_keys:?}",
+        "no String-kind settings should remain — `default_model` + `advisor_model` + \
+         `fork_secondary_model` migrated to DynamicEnum; got: {string_keys:?}",
     );
 
     let dynamic_enum_keys = by_kind.remove("DynamicEnum").unwrap_or_default();
     assert_eq!(
         dynamic_enum_keys,
-        vec!["default_model", "fork_secondary_model",],
+        vec!["advisor_model", "default_model", "fork_secondary_model",],
         "DynamicEnum kind membership drift",
     );
 
@@ -2068,6 +2069,7 @@ fn defaults_round_trip_through_registry() {
             "multiline_mode" => SettingValue::Bool(false),
             "permission_mode" => SettingValue::Enum("ask"),
             "default_model" => SettingValue::String(String::new()),
+            "advisor_model" => SettingValue::String(String::new()),
             "max_thoughts_width" => SettingValue::Int(120),
             "scroll_speed" => SettingValue::Int(50),
             "scroll_mode" => SettingValue::Enum("auto"),
@@ -4441,6 +4443,101 @@ fn pr14_default_model_picker_row_zero_commits_clear_action() {
     }
 }
 
+/// `advisor_model` picker commits `SetAdvisorModel` (not `SetDefaultModel`).
+#[test]
+fn advisor_model_picker_commits_without_switching_primary() {
+    let snapshot = PagerLocalSnapshot {
+        current_model_name: Some("Grok 4.5".to_string()),
+        available_models: vec![
+            (
+                "Grok 4.5".to_string(),
+                agent_client_protocol::ModelId::new(std::sync::Arc::from("grok-4.5")),
+            ),
+            (
+                "GPT-5.6 Luna".to_string(),
+                agent_client_protocol::ModelId::new(std::sync::Arc::from("codex/gpt-5.6-luna")),
+            ),
+        ],
+        ..PagerLocalSnapshot::default()
+    };
+    let mut s = SettingsModalState::new(
+        Arc::new(SettingsRegistry::defaults()),
+        UiConfig::default(),
+        snapshot,
+    );
+    navigate_to(&mut s, "advisor_model");
+    let outcome = handle_settings_key(&mut s, &press(KeyCode::Enter));
+    assert!(
+        matches!(outcome, SettingsKeyOutcome::Changed),
+        "Enter on Advisor model must open the catalog picker, got {outcome:?}"
+    );
+    assert!(
+        matches!(s.mode(), SettingsModalMode::PickingEnum { key, .. } if key == "advisor_model"),
+        "picker must target advisor_model, not default_model"
+    );
+    // Row 0 is (no override); row 1 Grok 4.5; row 2 Luna.
+    let _ = handle_settings_key(&mut s, &press(KeyCode::Down));
+    let _ = handle_settings_key(&mut s, &press(KeyCode::Down));
+    let outcome = handle_settings_key(&mut s, &press(KeyCode::Enter));
+    match outcome {
+        SettingsKeyOutcome::Action(Action::SetAdvisorModel(id)) => {
+            assert_eq!(id.0.as_ref(), "codex/gpt-5.6-luna");
+        }
+        SettingsKeyOutcome::Action(Action::SetDefaultModel(_)) => {
+            panic!("advisor picker must not dispatch SetDefaultModel");
+        }
+        other => panic!("expected SetAdvisorModel, got {other:?}"),
+    }
+}
+
+/// Mouse click on `advisor_model` opens the same catalog picker.
+#[test]
+fn advisor_model_mouse_click_opens_picker() {
+    let snapshot = PagerLocalSnapshot {
+        available_models: vec![(
+            "GPT-5.6 Luna".to_string(),
+            agent_client_protocol::ModelId::new(std::sync::Arc::from("codex/gpt-5.6-luna")),
+        )],
+        ..PagerLocalSnapshot::default()
+    };
+    let mut s = SettingsModalState::new(
+        Arc::new(SettingsRegistry::defaults()),
+        UiConfig::default(),
+        snapshot,
+    );
+    s.list_area = Rect {
+        x: 0,
+        y: 0,
+        width: 80,
+        height: 80,
+    };
+    s.row_rects.resize(s.rows.len(), Rect::default());
+    let row_idx = row_idx_for(&s, "advisor_model");
+    s.row_rects[row_idx] = Rect {
+        x: 0,
+        y: row_idx as u16,
+        width: 80,
+        height: 1,
+    };
+    let _ = handle_settings_mouse(
+        &mut s,
+        MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        20,
+        row_idx as u16,
+    );
+    let outcome = handle_settings_mouse(
+        &mut s,
+        MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        20,
+        row_idx as u16,
+    );
+    assert!(matches!(outcome, SettingsKeyOutcome::Changed));
+    assert!(
+        matches!(s.mode(), SettingsModalMode::PickingEnum { key, .. } if key == "advisor_model"),
+        "second click must open the advisor catalog picker"
+    );
+}
+
 /// Mouse click on `default_model` opens picker (keyboard ↔ mouse parity).
 #[test]
 fn pr14_mouse_click_on_dynamic_enum_row_opens_picker() {
@@ -6540,6 +6637,30 @@ fn pr13_cli_batch_settings_are_discoverable_via_search() {
 // fork_secondary_model (DynamicEnum, restart_required: false)
 // ---------------------------------------------------------------------------
 
+/// `advisor_model` lives under Models, next to Default model.
+#[test]
+fn advisor_model_renders_under_models_category() {
+    let reg = SettingsRegistry::defaults();
+    let meta = reg
+        .find("advisor_model")
+        .expect("`advisor_model` must be registered");
+    assert_eq!(
+        meta.category,
+        SettingCategory::Models,
+        "`advisor_model` must live under Models next to Default model"
+    );
+    assert_eq!(meta.label, "Advisor model");
+    assert_eq!(
+        meta.owner,
+        SettingOwner::Shell,
+        "`advisor_model` is SHELL-owned (persisted via util::config)"
+    );
+    assert!(
+        !meta.restart_required,
+        "changing models.advisor must not require a restart"
+    );
+}
+
 /// `fork_secondary_model` lives under Models.
 #[test]
 fn pr14_model_family_renders_under_models_category() {
@@ -6576,7 +6697,7 @@ fn pr14_restart_required_split() {
 fn pr14_string_settings_use_known_model_validator() {
     use xai_grok_pager::settings::DynamicEnumSource;
     let reg = SettingsRegistry::defaults();
-    for key in ["default_model", "fork_secondary_model"] {
+    for key in ["default_model", "advisor_model", "fork_secondary_model"] {
         let meta = reg
             .find(key)
             .unwrap_or_else(|| panic!("`{key}` must be registered"));
@@ -6600,6 +6721,12 @@ fn pr14_model_family_defaults_roundtrip_via_current_value_for() {
     use xai_grok_pager::settings::current_value_for;
     let ui = UiConfig::default();
     let pager = PagerLocalSnapshot::default();
+
+    assert_eq!(
+        current_value_for("advisor_model", &ui, &pager),
+        Some(SettingValue::String(String::new())),
+        "`advisor_model` defaults to empty (unset); enable is session-scoped"
+    );
 
     // Baseline value folds to empty (no-opinion sentinel).
     let value = current_value_for("fork_secondary_model", &ui, &pager).unwrap();
@@ -6631,7 +6758,10 @@ fn pr14_fork_secondary_model_reads_ui_config_non_baseline() {
 #[test]
 fn pr14_model_family_settings_are_discoverable_via_search() {
     let reg = SettingsRegistry::defaults();
-    let cases = [("fork", "fork_secondary_model")];
+    let cases = [
+        ("fork", "fork_secondary_model"),
+        ("advisor", "advisor_model"),
+    ];
     for (query, expected_key) in cases {
         let hits = reg.search(query);
         assert!(

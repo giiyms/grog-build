@@ -102,6 +102,7 @@ xai-grok-config = { workspace = true }
 # (cpal is target-gated to non-Linux inside xai-grok-voice).
 xai-grok-voice = { path = "../xai-grok-voice", default-features = false, features = ["audio"] }
 xai-grok-shell = { workspace = true }
+grog-advisor = { path = "../grog-advisor" }
 # The status-line contract: the config the user writes and the payload the
 # agent sends. A leaf crate rather than the agent's, so the client reads it
 # from upstream of the crate that fills it in.

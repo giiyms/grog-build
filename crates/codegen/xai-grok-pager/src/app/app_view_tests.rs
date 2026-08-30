@@ -99,6 +99,7 @@ pub(crate) fn test_app() -> AppView {
         registry: ActionRegistry::defaults(),
         settings_registry: std::sync::Arc::new(crate::settings::SettingsRegistry::defaults()),
         current_ui: xai_grok_shell::agent::config::UiConfig::default(),
+        advisor_model: String::new(),
         status_line: Default::default(),
         cwd: std::path::PathBuf::from("/tmp"),
         cwd_has_git_ancestor: false,
