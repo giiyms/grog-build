@@ -10,7 +10,9 @@ pub mod models;
 pub mod store;
 
 pub use auth::{CodexAuth, CodexAuthError, auth_json_path, chatgpt_account_id, parse_auth_json};
-pub use client::{ClientError, ConsultResult, consult_body, consult_sync, refresh_sync};
+pub use client::{
+    ClientError, ConsultResult, ORIGINATOR, consult_body, consult_input, consult_sync, refresh_sync,
+};
 pub use models::{
     CODEX_FALLBACK_MODELS, CONSUMER_CODEX_MODELS, CodexModel, DEFAULT_CODEX_EFFORT,
     DEFAULT_CODEX_MODEL, DEFAULT_CODEX_QUALIFIED, select_codex_model_id,

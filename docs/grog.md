@@ -306,6 +306,17 @@ How to tell it is fixed: a Codex council seat **starts**, spawn log has
 `model_has_own_creds: true` / no parent grok token, and there is **no**
 `reqwest` builder error for `grog://codex/chat/completions`.
 
+Codex consults POST ChatGPT `/codex/responses` with `input` as a **list** of
+Responses items (`type=message`, `input_text` parts), not a prompt string.
+A string `input` is a live `HTTP 400: {"detail":"Input must be a list"}`.
+Originator stays `grog`. Auth is `~/.grog/auth/codex.json` (or imported
+`~/.codex/auth.json`), not the parent Grok token.
+
+Session **title generation** is HTTP-only (OaiCompatClient / reqwest). Native
+seats skip that call and use truncated user text so title-gen never builds
+`grog://codex/chat/completions` (same for `claude-bridge` / `antigravity`).
+Parent Grok sessions still title through grok-4.6.
+
 ## What we learned from the pi packages (and will not wrap)
 
 Those packages are the spec. Grog reimplements the **behavior** in Rust.
@@ -473,7 +484,7 @@ grog -p --workflow council "..."
 | Need | Today | Change |
 | --- | --- | --- |
 | Mixed models in one workflow | Landed — native ids go through grog-providers | |
-| Native vs HTTP routing | Landed — `codex/` / `claude-bridge/` / `antigravity/` children keep the qualified id and `grog://` marker; the sampler intercept sends them to grog-codex / CLI bridges. The HTTP sampler never POSTs `grog://codex/chat/completions`. | |
+| Native vs HTTP routing | Landed — qualified ids + `grog://` marker; intercept → grog-codex / CLI. Codex `input` is a Responses item list. Title-gen skips native models (no `grog://…/chat/completions` reqwest POST). | |
 | Parallelism | Rhai `parallel` + host spawn | Optional later: cap by `council.max_parallel` |
 | Subagent depth | Children cannot spawn children | Keep it. Council members are workflow agents, not nested subagents |
 | Cross-member context | Landed — Stage 2 is anonymized Response A/B/C; chair sees names | |

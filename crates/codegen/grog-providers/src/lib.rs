@@ -157,6 +157,36 @@ impl InferenceRoute {
     }
 }
 
+/// HTTP URL title-gen would POST via reqwest. Native seats return `None` so
+/// we never build `grog://codex/chat/completions` (live council title-gen
+/// error: `builder error for url (grog://…/chat/completions)`).
+pub fn title_generation_reqwest_url(model_id: &str, base_url: &str) -> Option<String> {
+    inference_route(model_id, base_url).sampler_chat_completions_url(base_url)
+}
+
+/// `true` when session title generation must not call the HTTP sampler.
+/// Council children and `/model` native seats skip the LLM title and use
+/// truncated user text instead of POSTing `grog://` through reqwest.
+pub fn skip_http_title_generation(model_id: &str, base_url: Option<&str>) -> bool {
+    consult_model_id(model_id, base_url).is_some() || base_url.is_some_and(is_native_base_url)
+}
+
+/// Sampler `model` when the aux Grok title model cannot be resolved.
+/// Native primaries keep a qualified consult id so [`skip_http_title_generation`]
+/// fires, instead of stamping `grok-4.6` onto a `grog://codex` client.
+pub fn title_generation_fallback_model(
+    requested_summary_model: &str,
+    primary_model: &str,
+    primary_base_url: &str,
+) -> String {
+    if skip_http_title_generation(primary_model, Some(primary_base_url)) {
+        consult_model_id(primary_model, Some(primary_base_url))
+            .unwrap_or_else(|| primary_model.to_string())
+    } else {
+        requested_summary_model.to_string()
+    }
+}
+
 pub fn inference_route(model_id: &str, base_url: &str) -> InferenceRoute {
     match consult_model_id(model_id, Some(base_url)) {
         Some(qualified) => {
@@ -353,5 +383,73 @@ mod tests {
         assert!(is_native_base_url("grog://antigravity"));
         assert!(!is_native_base_url("https://api.x.ai/v1"));
         assert!(!is_native_base_url("https://chatgpt.com/backend-api"));
+    }
+
+    #[test]
+    fn title_generation_never_builds_grog_scheme_reqwest_url() {
+        for (model, base) in [
+            (grog_codex::DEFAULT_CODEX_QUALIFIED, "grog://codex"),
+            ("gpt-5.6-luna", "grog://codex"),
+            (
+                grog_claude_bridge::DEFAULT_CLAUDE_QUALIFIED,
+                "grog://claude-bridge",
+            ),
+            ("claude-opus-5", "grog://claude-bridge"),
+            (
+                grog_antigravity::DEFAULT_ANTIGRAVITY_QUALIFIED,
+                "grog://antigravity",
+            ),
+            ("gemini-3.7-flash-high", "grog://antigravity"),
+        ] {
+            assert_eq!(
+                title_generation_reqwest_url(model, base),
+                None,
+                "{model} title-gen must not yield grog://…/chat/completions for reqwest"
+            );
+            assert!(
+                skip_http_title_generation(model, Some(base)),
+                "{model} + {base} skips HTTP title-gen"
+            );
+        }
+        assert!(skip_http_title_generation(
+            grog_codex::DEFAULT_CODEX_QUALIFIED,
+            None
+        ));
+        assert!(skip_http_title_generation("claude-opus-5", None));
+        assert!(skip_http_title_generation(
+            "antigravity/gemini-3.7-flash-high",
+            None
+        ));
+        assert!(!skip_http_title_generation(
+            "grok-4.6",
+            Some("https://api.x.ai/v1")
+        ));
+        assert_eq!(
+            title_generation_reqwest_url("grok-4.6", "https://api.x.ai/v1"),
+            Some("https://api.x.ai/v1/chat/completions".into())
+        );
+        assert_eq!(
+            title_generation_fallback_model("grok-4.6", "codex/gpt-5.6-luna", "grog://codex"),
+            grog_codex::DEFAULT_CODEX_QUALIFIED
+        );
+        assert_eq!(
+            title_generation_fallback_model("grok-4.6", "grok-4.6", "https://api.x.ai/v1"),
+            "grok-4.6"
+        );
+    }
+
+    #[test]
+    fn codex_consult_body_input_is_a_list() {
+        let body = grog_codex::consult_body(
+            grog_codex::DEFAULT_CODEX_MODEL,
+            "What is 2+2? Reply with one sentence.",
+            grog_codex::DEFAULT_CODEX_EFFORT,
+        );
+        assert!(
+            body["input"].is_array(),
+            "live Codex 400: Input must be a list"
+        );
+        assert_eq!(body["input"][0]["type"], "message");
+        assert_eq!(grog_codex::ORIGINATOR, "grog");
     }
 }

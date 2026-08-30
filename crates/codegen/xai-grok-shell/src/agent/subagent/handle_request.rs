@@ -647,6 +647,9 @@ pub(crate) async fn run_shell_child(
         child_session_dir.clone(),
         effective_model_id.clone(),
         sampling_client,
+        // Native children skip LLM titles (truncated user text) so reqwest
+        // never builds `grog://…/chat/completions`. HTTP children keep the
+        // sampler model for the first-prompt title path.
         effective_sampling_config.model.clone(),
     )
     .await

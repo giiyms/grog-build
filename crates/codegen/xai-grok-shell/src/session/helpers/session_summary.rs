@@ -151,6 +151,16 @@ pub async fn generate_session_summary(
     model: &str,
 ) -> String {
     let clean_message = title_source_text(&user_message);
+    // Native grog seats (council Codex/Claude/agy children, `/model` on a
+    // bridge) must not POST `grog://…/chat/completions` through reqwest.
+    // Truncated user text is the title; Grok aux titles stay on HTTP.
+    if grog_providers::skip_http_title_generation(model, None) {
+        tracing::debug!(
+            model = %model,
+            "session title generation skipped for native grog provider"
+        );
+        return title_fallback_from_user_text(&clean_message);
+    }
     let request = ConversationRequest::from_items(vec![
         ConversationItem::system(
             r#"You are tasked with generating the session title. The user is asking almost always software engineering related questions on their codebase.
@@ -428,5 +438,48 @@ mod tests {
             title_fallback_from_user_text("fix the auth bug in login.rs"),
             "fix the auth bug in login.rs",
         );
+    }
+
+    /// Live council title-gen: `builder error for url (grog://codex/chat/completions)`
+    /// (same for antigravity / claude-bridge). Native models must not select a
+    /// reqwest URL; [`super::generate_session_summary`] skips to truncated text.
+    #[test]
+    fn native_title_generation_never_selects_grog_scheme_reqwest_url() {
+        for (model, base) in [
+            ("codex/gpt-5.6-luna", "grog://codex"),
+            ("claude-bridge/claude-opus-5", "grog://claude-bridge"),
+            ("antigravity/gemini-3.7-flash-high", "grog://antigravity"),
+        ] {
+            assert!(
+                grog_providers::skip_http_title_generation(model, Some(base)),
+                "{model}"
+            );
+            assert_eq!(
+                grog_providers::title_generation_reqwest_url(model, base),
+                None,
+                "{model} must not build grog://…/chat/completions for reqwest"
+            );
+        }
+        assert!(!grog_providers::skip_http_title_generation(
+            "grok-4.6",
+            Some("https://api.x.ai/v1")
+        ));
+    }
+
+    #[tokio::test]
+    async fn native_model_title_generation_uses_truncated_user_text() {
+        let client = crate::sampling::Client::new(xai_grok_sampler::SamplerConfig {
+            model: "codex/gpt-5.6-luna".into(),
+            base_url: "grog://codex".into(),
+            ..Default::default()
+        })
+        .expect("client construction must not POST");
+        let title = super::generate_session_summary(
+            "What is 2+2? Reply with one sentence.".into(),
+            client,
+            "codex/gpt-5.6-luna",
+        )
+        .await;
+        assert_eq!(title, "What is 2+2? Reply with one sentence.");
     }
 }
