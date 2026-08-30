@@ -200,10 +200,8 @@ pub fn parse_consult_stream(body: &str) -> Result<ConsultResult, ClientError> {
                 }
             }
             "response.output_item.done" => {
-                if let Some(item) = event.get("item") {
-                    if let Some(text) = extract_item_text(item) {
-                        item_texts.push(text);
-                    }
+                if let Some(text) = event.get("item").and_then(extract_item_text) {
+                    item_texts.push(text);
                 }
             }
             "response.output_text.done" => {
@@ -212,10 +210,8 @@ pub fn parse_consult_stream(body: &str) -> Result<ConsultResult, ClientError> {
                 }
             }
             "response.completed" | "response.incomplete" => {
-                if let Some(resp) = event.get("response") {
-                    if let Some(text) = extract_output_text(resp) {
-                        completed_text = Some(text);
-                    }
+                if let Some(text) = event.get("response").and_then(extract_output_text) {
+                    completed_text = Some(text);
                 }
             }
             "response.failed" => {
