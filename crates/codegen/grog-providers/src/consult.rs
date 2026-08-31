@@ -138,7 +138,7 @@ async fn consult_codex(
     effort: Option<&str>,
 ) -> Result<ConsultOutcome, ConsultError> {
     let grog_home = grog_home_dir();
-    let user_home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    let user_home = xai_dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     let model = model.to_string();
     let prompt = prompt.to_string();
     let effort = effort.map(str::to_string);
@@ -167,7 +167,7 @@ async fn consult_codex(
 }
 
 fn grog_home_dir() -> PathBuf {
-    xai_grok_home::grok_home()
+    xai_dirs::grok_home()
 }
 
 #[cfg(test)]

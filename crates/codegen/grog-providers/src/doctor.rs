@@ -69,7 +69,7 @@ fn antigravity_check() -> DoctorCheck {
 }
 
 fn codex_check() -> DoctorCheck {
-    let grog_home = xai_grok_home::grok_home();
+    let grog_home = xai_dirs::grok_home();
     let grog_path = grog_codex::grog_codex_auth_path(&grog_home);
     if grog_path.is_file() {
         return match grog_codex::load_auth(&grog_path) {
@@ -85,7 +85,7 @@ fn codex_check() -> DoctorCheck {
             },
         };
     }
-    if let Some(home) = dirs::home_dir() {
+    if let Some(home) = xai_dirs::home_dir() {
         let cli = grog_codex::auth_json_path(&home);
         if cli.is_file() {
             return DoctorCheck {
@@ -135,7 +135,7 @@ pub fn login(provider: &str) -> Result<String, String> {
 
 fn login_codex() -> Result<String, String> {
     let user_home =
-        dirs::home_dir().ok_or_else(|| "could not resolve home directory".to_string())?;
+        xai_dirs::home_dir().ok_or_else(|| "could not resolve home directory".to_string())?;
     let cli = grog_codex::auth_json_path(&user_home);
     if !cli.is_file() {
         return Err(format!(
@@ -143,7 +143,7 @@ fn login_codex() -> Result<String, String> {
             cli.display()
         ));
     }
-    let grog_home = xai_grok_home::grok_home();
+    let grog_home = xai_dirs::grok_home();
     let dest = grog_codex::import_codex_cli_auth(&cli, &grog_home).map_err(|e| e.to_string())?;
     Ok(format!(
         "Imported ChatGPT Codex subscription into {} (0600). Pick a `codex/...` model.",

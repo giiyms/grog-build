@@ -12,8 +12,9 @@ lists `claude-bridge/`, `antigravity/`, and `codex/` ids, Ask* tools consult
 those backends, `/council` (and `/workflow council`) run a Karpathy-style
 three-stage deliberation, and `grog doctor` /
 `grog login [codex|claude|agy]` report PATH and Codex tokens. Home dir is
-`$GROG_HOME` or `~/.grog` (legacy `~/.grok` still wins if it already exists).
-Live `claude` / `agy` / Codex calls still require the user's own logins.
+`$GROG_HOME` (then `$GROK_HOME`) or `~/.grog`. Official grok stays in `~/.grok`
+and is never the default grog home. Live `claude` / `agy` / Codex calls still
+require the user's own logins.
 
 ## Goal
 
@@ -154,19 +155,20 @@ build. See [UPSTREAM.md](UPSTREAM.md#install-grog-not-the-xai-installer).
 
 ### Home, env, project dirs
 
-Today everything lives under `~/.grok` (`xai-grok-home`, `$GROK_HOME`).
+Dump `xai-dirs` is the single home resolver. Grog data lives under `~/.grog`
+(`$GROG_HOME` then `$GROK_HOME`). Official grok stays in `~/.grok`.
 
-| Today | Grog | Notes |
+| Dump / official grok | Grog | Notes |
 | --- | --- | --- |
-| `~/.grok` | `~/.grog` | Migrate: if `~/.grog` missing and `~/.grok` exists, copy or symlink once |
+| `~/.grok` | `~/.grog` | Do not default to an existing `~/.grok`. Never create or write that tree |
 | `$GROK_HOME` | `$GROG_HOME` | Read both; `GROG_HOME` wins |
 | `GROK_*` env | `GROG_*` | Accept both for one major version |
 | `.grok/` in a repo | `.grog/` | Also read `.grok/` so existing project plugins/workflows keep working |
 | `.grok-plugin/` | `.grog-plugin/` | Still accept `.grok-plugin/` and `.claude-plugin/` |
 | macOS MDM `ai.x.grok` | leave it | Do not pretend to own xAI MDM |
 
-`xai-grok-home` should grow `grog_home()` (or a renamed `app_home()`) that
-resolves `GROG_HOME` → `GROK_HOME` → `~/.grog` → migrate-from-`~/.grok`.
+`xai-dirs::grok_home()` resolves `GROG_HOME` → `GROK_HOME` → `<home>/.grog`
+and creates `~/.grog`, never `~/.grok`.
 
 ### Prompt and product copy
 
@@ -554,7 +556,7 @@ docs/grog.md                       # this file
 No `grog-pi-host`. No npm dependency.
 
 Installer / CLI identity edits stay in `xai-grok-pager`, `xai-grok-pager-bin`,
-`xai-grok-home`.
+`xai-dirs`.
 
 ## Build order
 
