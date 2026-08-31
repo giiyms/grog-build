@@ -38,8 +38,9 @@ git rebase origin/main   # on your grog branch
 Conflicts usually land in:
 
 - `xai-grok-pager-bin` / pager clap argv0
-- `xai-grok-home` (`GROG_HOME`)
+- `xai-dirs` (`GROG_HOME` / `~/.grog`; dump's single home resolver. Official grok stays in `~/.grok`)
 - `xai-grok-shell` catalog merge, sampler intercept, slash commands, privacy
+- pager TUI `/update` `/restart` / Session vs Advisor picker (dump moved `input/` and `search/` into `xai-grok-pager-render`)
 - `xai-grok-agent/templates/*.md` (re-run `python3 scripts/encrypt_templates.py`
   from `crates/codegen/xai-grok-agent` after resolving prompt.md)
 
