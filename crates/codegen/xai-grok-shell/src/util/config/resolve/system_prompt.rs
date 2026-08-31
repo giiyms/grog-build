@@ -7,9 +7,8 @@ pub const DEFAULT_SYSTEM_PROMPT_LABEL: &str = xai_grok_agent::DEFAULT_SYSTEM_PRO
 /// Precedence: env → config per-model → `[agent]` → GB per-model → GB global →
 /// `"Grog"`. Empty/whitespace falls through.
 ///
-/// Per-model TOML is looked up by session catalog id, then routing slug
-/// (`ModelInfo.model`). Do not use CLI `-m` alone — it may outlive a mid-session
-/// model switch.
+/// Per-model TOML is looked up by session catalog id, then routing slug (`ModelInfo.model`).
+/// Do not use CLI `-m` alone; it may outlive a mid-session model switch.
 pub(crate) fn resolve_system_prompt_label(
     cfg: &crate::agent::config::Config,
     model_id: &str,
@@ -69,6 +68,8 @@ mod system_prompt_label_tests {
 
     /// Serialize access to `GROG_SYSTEM_PROMPT_LABEL` / `GROK_SYSTEM_PROMPT_LABEL`
     /// and clear both for tier tests.
+    /// `env_wins_over_all_tiers` mutates the env.
+    /// Without this lock, parallel tests that expect the var unset (e.g. `gb_per_model_beats_gb_global`) flake.
     fn with_env_cleared<R>(f: impl FnOnce() -> R) -> R {
         let _guard = ENV_LOCK.lock().unwrap();
         let prev_grog = std::env::var(ENV_SYSTEM_PROMPT_LABEL_GROG).ok();
