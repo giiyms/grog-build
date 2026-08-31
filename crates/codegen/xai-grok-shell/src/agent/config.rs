@@ -3513,7 +3513,6 @@ pub(crate) fn resolve_model_list(
     merge_grog_native_catalog(&mut resolved, &cfg.endpoints);
     resolved
 }
-}
 
 /// Insert grog native catalogs (`claude-bridge/…`, `antigravity/…`, `codex/…`)
 /// without overwriting existing config or remote keys.
