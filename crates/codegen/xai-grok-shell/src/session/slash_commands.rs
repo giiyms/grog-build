@@ -302,7 +302,7 @@ pub(super) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
     BuiltinCommand {
         name: "advisor",
         description: "Sidecar reviewer watching the live transcript",
-        argument_hint: Some("[on|off|status|model|luna|opus|sonnet|agy]"),
+        argument_hint: Some("[on|off|status|model|luna|fable|opus|sonnet|agy]"),
         aliases: &[],
         model_authored_eligibility: ModelAuthoredEligibility::Denied,
         gate: BuiltinGate::AlwaysOn,

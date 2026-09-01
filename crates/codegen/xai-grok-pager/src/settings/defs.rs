@@ -898,7 +898,7 @@ pub fn default_settings() -> Vec<SettingMeta> {
             owner: SettingOwner::Shell,
             label: "Advisor model",
             description: "Sidecar reviewer persisted to models.advisor. Enable with /advisor; picking here does not switch the live session.",
-            keywords: &["advisor", "sidecar", "reviewer", "model", "luna", "opus", "sonnet"],
+            keywords: &["advisor", "sidecar", "reviewer", "model", "luna", "fable", "opus", "sonnet"],
             kind: SettingKind::DynamicEnum {
                 default: "",
                 source: DynamicEnumSource::ActiveModelCatalog,

@@ -46,7 +46,7 @@ fn register_ask_tools(builder: &mut xai_grok_tools::registry::types::ToolRegistr
 pub struct AskConsultInput {
     /// Question or brief to send to the other model.
     pub prompt: String,
-    /// Optional catalog id (e.g. `claude-opus-5`). Default is the provider's first catalog entry.
+    /// Optional catalog id (e.g. `claude-fable-5-1`). Default is the provider's first catalog entry.
     #[serde(default)]
     pub model: Option<String>,
 }

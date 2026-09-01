@@ -115,6 +115,38 @@ mod tests {
                 .any(|w| w == ["--output-format", "stream-json"])
         );
         assert_eq!(plan.args.last().unwrap(), "hello");
+        let typed = provider_turn_argv(ProviderTurnSpec {
+            prompt: "hello",
+            model_id: "claude-fable-5-1",
+            settings: LongContextSettings::default(),
+            resume_session: None,
+            mcp_config_path: None,
+            claude_bin: None,
+            effort: None,
+        });
+        assert!(
+            typed
+                .args
+                .windows(2)
+                .any(|w| w == ["--model", "claude-fable-5-1"])
+        );
+        let unknown = provider_turn_argv(ProviderTurnSpec {
+            prompt: "hello",
+            model_id: "claude-not-in-catalog-yet",
+            settings: LongContextSettings::default(),
+            resume_session: None,
+            mcp_config_path: None,
+            claude_bin: None,
+            effort: None,
+        });
+        assert!(
+            unknown
+                .args
+                .windows(2)
+                .any(|w| w == ["--model", "claude-not-in-catalog-yet"]),
+            "unknown ids must pass through, not rewrite to sonnet-4-6: {:?}",
+            unknown.args
+        );
     }
 
     #[test]
@@ -134,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    fn ask_opus_5_uses_medium_effort_before_prompt() {
+    fn ask_fable_51_uses_medium_effort_before_prompt() {
         let plan = ask_claude_argv(AskClaudeSpec {
             prompt: "second opinion",
             model_id: crate::DEFAULT_CLAUDE_MODEL,
@@ -147,7 +179,14 @@ mod tests {
         assert!(
             plan.args
                 .windows(2)
-                .any(|w| w == ["--model", "claude-opus-5"])
+                .any(|w| w == ["--model", "claude-fable-5-1"])
+        );
+        assert!(
+            !plan.args
+                .windows(2)
+                .any(|w| w == ["--model", "claude-sonnet-4-6"]),
+            "Fable 5.1 must not be rewritten to Sonnet 4.6: {:?}",
+            plan.args
         );
         assert!(plan.args.windows(2).any(|w| w == ["--effort", "medium"]));
         assert_eq!(plan.args.last().unwrap(), "second opinion");
@@ -160,12 +199,12 @@ mod tests {
         );
         assert!(
             !plan.args.windows(2).any(|w| w == ["--effort", "high"]),
-            "Opus 5 council/Ask default is medium, not a higher tier: {:?}",
+            "Fable 5.1 council/Ask default is medium, not Claude Code's High: {:?}",
             plan.args
         );
         assert!(
             !plan.args.windows(2).any(|w| w == ["--effort", "xhigh"]),
-            "Opus 5 council/Ask default is medium, not a higher tier: {:?}",
+            "Fable 5.1 council/Ask default is medium, not a higher tier: {:?}",
             plan.args
         );
     }

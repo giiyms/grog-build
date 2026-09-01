@@ -15,7 +15,7 @@ pub enum AdvisorVerb {
     /// `/advisor model` with no extra args — pager opens the shared picker
     /// targeting Advisor; headless shell cycles as a fallback.
     OpenPicker,
-    /// `/advisor cycle` — walk luna → opus → sonnet → agy.
+    /// `/advisor cycle` — walk luna → fable → opus → sonnet → agy.
     Cycle,
     Dump,
     /// `/advisor luna` / `/advisor sonnet high` — set + enable.
@@ -107,6 +107,8 @@ mod tests {
                 effort: None,
             })
         );
+        let fable = parse_verb("on fable").unwrap();
+        assert!(matches!(fable, AdvisorVerb::On { spec: Some(s) } if s.raw == "fable"));
         let opus = parse_verb("on opus").unwrap();
         assert!(matches!(opus, AdvisorVerb::On { spec: Some(s) } if s.raw == "opus"));
         let sonnet = parse_verb("sonnet").unwrap();
@@ -119,6 +121,13 @@ mod tests {
             AdvisorVerb::Set(spec) => {
                 assert_eq!(spec.raw, "luna");
                 assert_eq!(spec.effort.as_deref(), Some("xhigh"));
+            }
+            other => panic!("{other:?}"),
+        }
+        match parse_verb("fable medium").unwrap() {
+            AdvisorVerb::Set(spec) => {
+                assert_eq!(spec.raw, "fable");
+                assert_eq!(spec.effort.as_deref(), Some("medium"));
             }
             other => panic!("{other:?}"),
         }

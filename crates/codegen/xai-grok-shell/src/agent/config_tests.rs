@@ -7124,12 +7124,18 @@ fn resolve_model_list_empty_prefetch_yields_empty_base() {
         resolved.values().all(|e| e.base_url.starts_with("grog://")),
         "empty prefetch must drop xAI defaults; grog native catalog may remain"
     );
+    assert!(resolved.contains_key("claude-bridge/claude-fable-5-1"));
+    assert!(resolved.contains_key("claude-bridge/claude-fable-5"));
+    assert!(resolved.contains_key("claude-bridge/claude-sonnet-5"));
     assert!(resolved.contains_key("claude-bridge/claude-opus-5"));
     assert!(resolved.contains_key("claude-bridge/claude-opus-4-6"));
     assert!(resolved.contains_key("antigravity/gemini-3.7-flash-high"));
     assert!(resolved.contains_key("antigravity/gemini-3.6-flash"));
     assert!(resolved.contains_key("codex/gpt-5.6-luna"));
+    assert!(resolved.contains_key("codex/gpt-5.6-sol"));
+    assert!(resolved.contains_key("codex/gpt-5.6-terra"));
     assert!(resolved.contains_key("codex/gpt-5.1-codex"));
+    assert!(resolved.contains_key("codex/gpt-5.1-codex-max"));
     assert!(resolved.contains_key("codex/gpt-5.3-codex"));
 }
 #[test]
@@ -7163,6 +7169,7 @@ fn grog_native_catalog_has_own_creds_and_keeps_qualified_sampler_model() {
     let resolved = resolve_model_list(&Config::default(), None);
     for key in [
         "codex/gpt-5.6-luna",
+        "claude-bridge/claude-fable-5-1",
         "claude-bridge/claude-opus-5",
         "antigravity/gemini-3.7-flash-high",
     ] {

@@ -31,17 +31,33 @@ pub struct ClaudeBridgeModel {
     pub display_name: &'static str,
 }
 
-/// Claude Code `--model` id for Opus 5 (current Opus).
-pub const DEFAULT_CLAUDE_MODEL: &str = "claude-opus-5";
+/// Claude Code `--model` id for Fable 5.1 (current Claude default).
+pub const DEFAULT_CLAUDE_MODEL: &str = "claude-fable-5-1";
 
 /// Qualified `provider/model` form of [`DEFAULT_CLAUDE_MODEL`].
-pub const DEFAULT_CLAUDE_QUALIFIED: &str = "claude-bridge/claude-opus-5";
+pub const DEFAULT_CLAUDE_QUALIFIED: &str = "claude-bridge/claude-fable-5-1";
 
 /// Claude Code `--effort` for AskClaude / council (not a higher thinking tier).
+/// Fable 5.1 defaults to High in Claude Code and Medium on Claude.ai; grog
+/// keeps the prior Opus council default of medium.
 pub const DEFAULT_CLAUDE_EFFORT: &str = "medium";
 
-/// Picker order. `opus` resolves to the first opus entry ([`DEFAULT_CLAUDE_MODEL`]).
+/// Picker order. First entry is [`DEFAULT_CLAUDE_MODEL`]. `fable` resolves
+/// to Fable 5.1; `opus` still maps to the Opus 5 row; `sonnet` follows the
+/// newest catalog id containing "sonnet".
 pub const CLAUDE_BRIDGE_MODELS: &[ClaudeBridgeModel] = &[
+    ClaudeBridgeModel {
+        id: "claude-fable-5-1",
+        display_name: "Fable 5.1",
+    },
+    ClaudeBridgeModel {
+        id: "claude-fable-5",
+        display_name: "Fable 5",
+    },
+    ClaudeBridgeModel {
+        id: "claude-sonnet-5",
+        display_name: "Sonnet 5",
+    },
     ClaudeBridgeModel {
         id: "claude-opus-5",
         display_name: "Opus 5",
@@ -72,15 +88,31 @@ const CTX_200K: u32 = 200_000;
 const CTX_1M: u32 = 1_000_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CliModel {
-    pub cli_id: &'static str,
+pub struct CliModel<'a> {
+    pub cli_id: &'a str,
     pub context_window: u32,
 }
 
 /// Map a grog picker id to the Claude Code `--model` string.
-pub fn resolve_cli_model(id: &str, settings: LongContextSettings) -> CliModel {
+///
+/// Unknown ids pass through as typed. Do **not** rewrite them to
+/// `claude-sonnet-4-6` — that dropped `claude-fable-5-1` / `claude-sonnet-5`
+/// before they had catalog rows.
+pub fn resolve_cli_model<'a>(id: &'a str, settings: LongContextSettings) -> CliModel<'a> {
     let one_m_paid = settings.plan == Plan::Max || settings.extra_usage;
     match id {
+        "claude-fable-5-1" => CliModel {
+            cli_id: "claude-fable-5-1",
+            context_window: CTX_1M,
+        },
+        "claude-fable-5" => CliModel {
+            cli_id: "claude-fable-5",
+            context_window: CTX_1M,
+        },
+        "claude-sonnet-5" => CliModel {
+            cli_id: "claude-sonnet-5",
+            context_window: CTX_200K,
+        },
         "claude-opus-5" => CliModel {
             cli_id: "claude-opus-5",
             context_window: CTX_1M,
@@ -123,8 +155,8 @@ pub fn resolve_cli_model(id: &str, settings: LongContextSettings) -> CliModel {
             cli_id: "claude-haiku-4-5",
             context_window: CTX_200K,
         },
-        _ => CliModel {
-            cli_id: "claude-sonnet-4-6",
+        other => CliModel {
+            cli_id: other,
             context_window: CTX_200K,
         },
     }
@@ -155,14 +187,57 @@ mod tests {
     use super::*;
 
     #[test]
-    fn opus_5_is_current_opus_without_1m_suffix() {
+    fn fable_51_is_current_claude_without_rewrite() {
+        let m = resolve_cli_model("claude-fable-5-1", LongContextSettings::default());
+        assert_eq!(m.cli_id, "claude-fable-5-1");
+        assert_eq!(m.context_window, CTX_1M);
+        assert_eq!(DEFAULT_CLAUDE_MODEL, "claude-fable-5-1");
+        assert_eq!(DEFAULT_CLAUDE_QUALIFIED, "claude-bridge/claude-fable-5-1");
+        assert_eq!(DEFAULT_CLAUDE_EFFORT, "medium");
+        assert_eq!(CLAUDE_BRIDGE_MODELS[0].id, DEFAULT_CLAUDE_MODEL);
+        assert!(
+            CLAUDE_BRIDGE_MODELS
+                .iter()
+                .any(|m| m.id == "claude-fable-5"),
+            "Fable 5 stays pickable"
+        );
+        assert!(
+            CLAUDE_BRIDGE_MODELS
+                .iter()
+                .any(|m| m.id == "claude-sonnet-5"),
+            "Sonnet 5 is the Claude Code sonnet alias"
+        );
+        assert!(
+            !CLAUDE_BRIDGE_MODELS
+                .iter()
+                .any(|m| m.id.contains("mythos")),
+            "Mythos is trusted-access only"
+        );
+    }
+
+    #[test]
+    fn opus_5_stays_in_catalog_without_1m_suffix() {
         let m = resolve_cli_model("claude-opus-5", LongContextSettings::default());
         assert_eq!(m.cli_id, "claude-opus-5");
         assert_eq!(m.context_window, CTX_1M);
-        assert_eq!(DEFAULT_CLAUDE_MODEL, "claude-opus-5");
-        assert_eq!(DEFAULT_CLAUDE_QUALIFIED, "claude-bridge/claude-opus-5");
-        assert_eq!(DEFAULT_CLAUDE_EFFORT, "medium");
-        assert_eq!(CLAUDE_BRIDGE_MODELS[0].id, DEFAULT_CLAUDE_MODEL);
+        assert_ne!(DEFAULT_CLAUDE_MODEL, "claude-opus-5");
+        assert!(CLAUDE_BRIDGE_MODELS.iter().any(|m| m.id == "claude-opus-5"));
+    }
+
+    #[test]
+    fn sonnet_5_does_not_rewrite_to_sonnet_46() {
+        let m = resolve_cli_model("claude-sonnet-5", LongContextSettings::default());
+        assert_eq!(m.cli_id, "claude-sonnet-5");
+        assert_ne!(m.cli_id, "claude-sonnet-4-6");
+    }
+
+    #[test]
+    fn unknown_cli_id_passes_through_instead_of_rewriting_to_sonnet_46() {
+        let m = resolve_cli_model("claude-fable-5-1", LongContextSettings::default());
+        assert_eq!(m.cli_id, "claude-fable-5-1");
+        let typed = resolve_cli_model("claude-not-in-catalog-yet", LongContextSettings::default());
+        assert_eq!(typed.cli_id, "claude-not-in-catalog-yet");
+        assert_ne!(typed.cli_id, "claude-sonnet-4-6");
     }
 
     #[test]

@@ -28,6 +28,8 @@ pub const DEFAULT_CODEX_EFFORT: &str = "xhigh";
 /// catalog for API-org accounts but is never the unadvertised default.
 pub const CONSUMER_CODEX_MODELS: &[&str] = &[
     "gpt-5.6-luna",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
     "gpt-5.1-codex",
     "gpt-5.1-codex-max",
     "gpt-5.1-codex-mini",
@@ -42,8 +44,20 @@ pub const CODEX_FALLBACK_MODELS: &[CodexModel] = &[
         display_name: "GPT-5.6 Luna",
     },
     CodexModel {
+        id: "gpt-5.6-sol",
+        display_name: "GPT-5.6 Sol",
+    },
+    CodexModel {
+        id: "gpt-5.6-terra",
+        display_name: "GPT-5.6 Terra",
+    },
+    CodexModel {
         id: "gpt-5.1-codex",
         display_name: "GPT-5.1 Codex",
+    },
+    CodexModel {
+        id: "gpt-5.1-codex-max",
+        display_name: "GPT-5.1 Codex Max",
     },
     CodexModel {
         id: "gpt-5.1-codex-mini",
@@ -103,6 +117,23 @@ mod tests {
                 .any(|m| m.id == "gpt-5.3-codex"),
             "org accounts can still pick gpt-5.3-codex from the catalog"
         );
+        assert!(
+            CODEX_FALLBACK_MODELS
+                .iter()
+                .any(|m| m.id == "gpt-5.6-sol"),
+            "Sol is on the picker; council default stays Luna"
+        );
+        assert!(
+            CODEX_FALLBACK_MODELS
+                .iter()
+                .any(|m| m.id == "gpt-5.6-terra")
+        );
+        assert!(
+            CODEX_FALLBACK_MODELS
+                .iter()
+                .any(|m| m.id == "gpt-5.1-codex-max"),
+            "codex-max was consumer-only; expose it on the picker"
+        );
     }
 
     #[test]
@@ -111,6 +142,15 @@ mod tests {
         assert_eq!(
             select_codex_model_id(&["gpt-5.3-codex", "gpt-5.6-luna"]),
             "gpt-5.6-luna"
+        );
+        assert_eq!(
+            select_codex_model_id(&["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]),
+            "gpt-5.6-luna",
+            "advertised Sol/Terra must not steal the Luna default"
+        );
+        assert_eq!(
+            select_codex_model_id(&["gpt-5.6-sol", "gpt-5.6-terra"]),
+            "gpt-5.6-sol"
         );
         assert_eq!(
             select_codex_model_id(&["gpt-5.3-codex", "gpt-5.1-codex"]),

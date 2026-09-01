@@ -196,7 +196,7 @@ fn degraded_membership_returns_seat_and_chair_not_null() {
             if opts.label.as_deref() == Some("council-chair-verdict") {
                 return agent_ok("  pipeline works, but membership is degraded  ");
             }
-            if opts.model.as_deref() == Some("claude-bridge/claude-opus-5") {
+            if opts.model.as_deref() == Some("claude-bridge/claude-fable-5-1") {
                 assert_eq!(opts.effort.as_deref(), Some("medium"));
                 return agent_ok("Claude's independent smoke-test answer.");
             }
@@ -222,7 +222,7 @@ fn degraded_membership_returns_seat_and_chair_not_null() {
         "one live seat skips ranking: {report}"
     );
     assert!(
-        report.contains("claude-bridge/claude-opus-5"),
+        report.contains("claude-bridge/claude-fable-5-1"),
         "named opinion must remain: {report}"
     );
     assert!(
@@ -258,7 +258,7 @@ fn three_seats_run_ranking_then_visible_verdict() {
                 return agent_ok("Ship approach A; B is a close second.");
             }
             match opts.model.as_deref() {
-                Some("claude-bridge/claude-opus-5") => {
+                Some("claude-bridge/claude-fable-5-1") => {
                     assert_eq!(opts.effort.as_deref(), Some("medium"));
                     agent_ok("Use a write-through cache.")
                 }
@@ -288,7 +288,7 @@ fn three_seats_run_ranking_then_visible_verdict() {
 #[test]
 fn chair_failure_still_returns_the_live_seat() {
     let result = run_council(
-        serde_json::json!({ "query": "smoke", "members": ["claude-bridge/claude-opus-5"] }),
+        serde_json::json!({ "query": "smoke", "members": ["claude-bridge/claude-fable-5-1"] }),
         |opts| {
             if opts.label.as_deref() == Some("council-chair-verdict") {
                 return agent_fail();

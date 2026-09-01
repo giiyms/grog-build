@@ -85,14 +85,14 @@ mod tests {
             None,
             "codex/gpt-5.6-luna",
         );
-        assert_eq!(seat.short_name, "opus");
+        assert_eq!(seat.short_name, "fable");
         assert_eq!(src, SeatSource::Complement);
     }
 
     #[test]
     fn prefer_complement_when_unset() {
         let (seat, src) = prefer_config_or_complement(None, None, "grok-4");
-        assert_eq!(seat.short_name, "opus");
+        assert_eq!(seat.short_name, "fable");
         assert_eq!(src, SeatSource::Complement);
     }
 }

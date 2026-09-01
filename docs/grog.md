@@ -230,14 +230,14 @@ There is **no** Node host and **no** `grog plugin install npm:…` path for
 inference. Pi packages are reference material only.
 
 `/model` and `grog models` list `provider/model` ids
-(`claude-bridge/claude-opus-5`, `antigravity/gemini-3.7-flash-high`,
+(`claude-bridge/claude-fable-5-1`, `antigravity/gemini-3.7-flash-high`,
 `codex/gpt-5.6-luna`). Defaults (Ask\* / council seats; older catalog
 ids stay pickable):
 
 | Seat | Catalog id | Thinking |
 | --- | --- | --- |
 | Codex | `codex/gpt-5.6-luna` | Responses `reasoning.effort` **xhigh** (Codex CLI: none/low/medium/high/**xhigh**/max) |
-| Claude | `claude-bridge/claude-opus-5` | Claude Code `--effort medium` |
+| Claude | `claude-bridge/claude-fable-5-1` | Claude Code `--effort medium` |
 | agy | `antigravity/gemini-3.7-flash-high` | agy `--effort high` (agy only accepts low/medium/**high**; Flash slugs also bake `-low`/`-medium`/`-high`) |
 
 Do not default council or AskCodex to `gpt-5.3-codex` — consumer ChatGPT
@@ -458,7 +458,7 @@ Ask*/council recursion is denied. Members run **read-only isolated Ask**
 (Claude: Read/Glob/Grep/Web only; agy: **Plan** mode; Codex: text consult).
 Only the chair may write, and only if `args.apply == true`.
 
-Default members: `claude-bridge/claude-opus-5` (medium thinking),
+Default members: `claude-bridge/claude-fable-5-1` (medium thinking),
 `antigravity/gemini-3.7-flash-high` (`--effort high`, Plan mode),
 `codex/gpt-5.6-luna` (`reasoning.effort` xhigh). Override with
 `args.members`, `args.chair`. Codex defaults to `gpt-5.6-luna` because
@@ -532,7 +532,7 @@ sidecar.
 ```text
 /advisor              # toggle enable (session-scoped)
 /advisor on           # enable; complement of the primary if no models.advisor
-/advisor luna         # persist + enable Luna (also opus, sonnet, agy, family aliases)
+/advisor luna         # persist + enable Luna (also fable, opus, sonnet, agy, family aliases)
 /advisor model        # same picker, already targeting Advisor
 /advisor status       # pretty name + qualified id + models.advisor vs session override
 /advisor off          # disable this session; models.advisor stays

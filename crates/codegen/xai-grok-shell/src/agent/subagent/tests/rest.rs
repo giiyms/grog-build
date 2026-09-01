@@ -2377,6 +2377,7 @@ fn resolve_model_override_routes_grog_native_council_seats_off_http() {
     );
     for key in [
         "codex/gpt-5.6-luna",
+        "claude-bridge/claude-fable-5-1",
         "claude-bridge/claude-opus-5",
         "antigravity/gemini-3.7-flash-high",
     ] {
@@ -2437,7 +2438,11 @@ fn resolve_model_override_routes_grog_native_council_seats_off_http() {
                         assert_eq!(key, "codex/gpt-5.6-luna");
                     }
                     grog_providers::ProviderId::ClaudeBridge => {
-                        assert_eq!(key, "claude-bridge/claude-opus-5");
+                        assert!(
+                            key == "claude-bridge/claude-fable-5-1"
+                                || key == "claude-bridge/claude-opus-5",
+                            "{key}"
+                        );
                     }
                     grog_providers::ProviderId::Antigravity => {
                         assert_eq!(key, "antigravity/gemini-3.7-flash-high");
