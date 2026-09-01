@@ -1,0 +1,2 @@
+/tmp/grog-verify-proof-identity
+/tmp/grog-verify-proof-identity/.verify-grog-owned

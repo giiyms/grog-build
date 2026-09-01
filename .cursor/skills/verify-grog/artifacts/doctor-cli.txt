@@ -1,0 +1,48 @@
+Grok Doctor
+
+Environment
+  · terminal                     Unknown
+  ? terminal version             unavailable
+  · multiplexer                  None detected
+  · ssh                          no
+  · color                        none
+  · themes                       2/5: groknight, grokday
+  · newline                      Alt+Enter (no Kitty keyboard protocol; Shift+Enter equals Enter)
+
+Clipboard
+  · native                       local (xclip)
+  · tmux                         off
+  · osc 52                       unknown
+  · SSH wrap                     off
+  · status                       confirmed
+
+Voice
+  · microphone                   none detected (no microphone recorder found on PATH: install pipewire (pw-record), pulseaudio-utils (parec), or alsa-utils (arecord))
+
+Findings
+  ! terminal.limited-color       Colors are off because `NO_COLOR` is set
+      Unset `NO_COLOR`, then restart Grok.
+  i terminal.newline-fallback    Shift+Enter can't insert a newline because the keyboard protocol is unavailable
+      Use Alt+Enter to insert a newline. If your terminal supports the Kitty keyboard protocol, enable it and restart Grok.
+  ! voice.no-input-device        Voice dictation is unavailable: no microphone recorder found on PATH: install pipewire (pw-record), pulseaudio-utils (parec), or alsa-utils (arecord)
+      Connect or select a microphone in your system sound settings. On Linux, install a supported audio recorder if none was found on PATH. Then run `/doctor` or `grok doctor` again. Doctor can't detect denied macOS microphone access when the system returns silence; follow the message shown when dictation fails.
+
+Checks not completed
+  ? runtime.fullscreen-active    unavailable
+  ? runtime.kitty-flags-pushed   unavailable
+
+Needs a running session
+  Some checks only run in Grok. Start Grok and run /doctor.
+
+2 issues, 1 recommendation
+
+Grog providers
+  claude-bridge    missing  claude not on PATH — install Claude Code and run `claude` once to log in
+  antigravity      missing  agy not on PATH — install Google Antigravity / Cloud Code Assist
+  codex            missing  no ChatGPT Codex tokens — run `grog login codex` after `codex login`
+
+Privacy
+  telemetry        off      default; remote settings cannot enable it
+  mixpanel/sentry  off      no baked endpoints; Sentry DSN is runtime-only
+  marketplace      empty    official xAI source is not auto-registered
+  feedback         off      `/feedback` and trace cards are opt-in
