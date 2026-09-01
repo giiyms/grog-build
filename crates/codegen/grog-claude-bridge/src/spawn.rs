@@ -182,7 +182,8 @@ mod tests {
                 .any(|w| w == ["--model", "claude-fable-5-1"])
         );
         assert!(
-            !plan.args
+            !plan
+                .args
                 .windows(2)
                 .any(|w| w == ["--model", "claude-sonnet-4-6"]),
             "Fable 5.1 must not be rewritten to Sonnet 4.6: {:?}",

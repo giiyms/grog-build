@@ -118,9 +118,7 @@ mod tests {
             "org accounts can still pick gpt-5.3-codex from the catalog"
         );
         assert!(
-            CODEX_FALLBACK_MODELS
-                .iter()
-                .any(|m| m.id == "gpt-5.6-sol"),
+            CODEX_FALLBACK_MODELS.iter().any(|m| m.id == "gpt-5.6-sol"),
             "Sol is on the picker; council default stays Luna"
         );
         assert!(

@@ -9,7 +9,9 @@ pub enum AdvisorVerb {
     /// Bare `/advisor` — session-scoped enable/disable toggle.
     Toggle,
     /// `/advisor on` or `/advisor on luna [xhigh]`.
-    On { spec: Option<ModelSpec> },
+    On {
+        spec: Option<ModelSpec>,
+    },
     Off,
     Status,
     /// `/advisor model` with no extra args — pager opens the shared picker
@@ -81,10 +83,7 @@ mod tests {
         assert_eq!(parse_verb("dump").unwrap(), AdvisorVerb::Dump);
         assert_eq!(parse_verb("model").unwrap(), AdvisorVerb::OpenPicker);
         assert_eq!(parse_verb("cycle").unwrap(), AdvisorVerb::Cycle);
-        assert_eq!(
-            parse_verb("on").unwrap(),
-            AdvisorVerb::On { spec: None }
-        );
+        assert_eq!(parse_verb("on").unwrap(), AdvisorVerb::On { spec: None });
     }
 
     #[test]
@@ -146,9 +145,7 @@ mod tests {
             other => panic!("{other:?}"),
         }
         match parse_verb("on luna xhigh").unwrap() {
-            AdvisorVerb::On {
-                spec: Some(spec),
-            } => {
+            AdvisorVerb::On { spec: Some(spec) } => {
                 assert_eq!(spec.raw, "luna");
                 assert_eq!(spec.effort.as_deref(), Some("xhigh"));
             }

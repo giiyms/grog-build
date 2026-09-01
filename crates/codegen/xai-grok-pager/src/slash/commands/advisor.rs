@@ -87,11 +87,7 @@ impl SlashCommand for AdvisorCommand {
     }
 }
 
-fn persist_and_enable(
-    ctx: &CommandExecCtx<'_>,
-    raw: &str,
-    effort: Option<&str>,
-) -> CommandResult {
+fn persist_and_enable(ctx: &CommandExecCtx<'_>, raw: &str, effort: Option<&str>) -> CommandResult {
     if let Ok(seat) = resolve_spec(raw, effort) {
         let id = ctx
             .models

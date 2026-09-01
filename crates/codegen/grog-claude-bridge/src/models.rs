@@ -208,9 +208,7 @@ mod tests {
             "Sonnet 5 is the Claude Code sonnet alias"
         );
         assert!(
-            !CLAUDE_BRIDGE_MODELS
-                .iter()
-                .any(|m| m.id.contains("mythos")),
+            !CLAUDE_BRIDGE_MODELS.iter().any(|m| m.id.contains("mythos")),
             "Mythos is trusted-access only"
         );
     }

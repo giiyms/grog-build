@@ -16,9 +16,9 @@ pub struct AdvisorSeat {
 
 impl AdvisorSeat {
     pub fn effort_token(&self) -> Option<String> {
-        self.effort.clone().or_else(|| {
-            grog_providers::default_effort(&self.qualified).map(str::to_string)
-        })
+        self.effort
+            .clone()
+            .or_else(|| grog_providers::default_effort(&self.qualified).map(str::to_string))
     }
 
     pub fn provider(&self) -> ProviderId {
@@ -137,7 +137,9 @@ pub fn normalize_alias(raw: &str) -> String {
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ResolveError {
-    #[error("unknown advisor model '{0}'. Try luna, fable, opus, sonnet, claude, codex, agy, or a qualified id like codex/gpt-5.6-luna")]
+    #[error(
+        "unknown advisor model '{0}'. Try luna, fable, opus, sonnet, claude, codex, agy, or a qualified id like codex/gpt-5.6-luna"
+    )]
     Unknown(String),
     #[error(
         "no Sonnet model is in grog's Claude catalog; pick fable, opus, luna, or agy, or a qualified id"
@@ -268,13 +270,7 @@ pub fn seat_readiness(seat: &AdvisorSeat) -> Option<String> {
     grog_providers::doctor::doctor_checks()
         .into_iter()
         .find(|c| c.provider == want)
-        .and_then(|c| {
-            if c.ok {
-                None
-            } else {
-                Some(c.detail)
-            }
-        })
+        .and_then(|c| if c.ok { None } else { Some(c.detail) })
 }
 
 #[cfg(test)]
@@ -312,7 +308,10 @@ mod tests {
             "claude-bridge/claude-fable-5-1",
         ] {
             let seat = resolve_short_name(raw).unwrap_or_else(|e| panic!("{raw}: {e}"));
-            assert_eq!(seat.qualified, "claude-bridge/claude-fable-5-1", "raw={raw}");
+            assert_eq!(
+                seat.qualified, "claude-bridge/claude-fable-5-1",
+                "raw={raw}"
+            );
             assert_eq!(seat.short_name, "fable", "raw={raw}");
             assert_eq!(seat.display_name, "Fable 5.1", "raw={raw}");
             assert_eq!(seat.effort_token().as_deref(), Some("medium"));
@@ -389,11 +388,11 @@ mod tests {
     #[test]
     fn complement_never_matches_primary_provider() {
         assert_eq!(complement_seat("grok-4").short_name, "fable");
-        assert_eq!(complement_seat("grok-4").provider(), ProviderId::ClaudeBridge);
         assert_eq!(
-            complement_seat("codex/gpt-5.6-luna").short_name,
-            "fable"
+            complement_seat("grok-4").provider(),
+            ProviderId::ClaudeBridge
         );
+        assert_eq!(complement_seat("codex/gpt-5.6-luna").short_name, "fable");
         assert_eq!(
             complement_seat("claude-bridge/claude-opus-5").short_name,
             "luna"
