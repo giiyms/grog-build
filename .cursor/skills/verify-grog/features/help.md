@@ -24,7 +24,9 @@ export VERIFY_RUN_ID=proof-help
 .cursor/skills/verify-grog/scripts/launch.sh
 .cursor/skills/verify-grog/scripts/doctor.sh
 .cursor/skills/verify-grog/scripts/drive-tmux.sh start
-.cursor/skills/verify-grog/scripts/drive-tmux.sh wait 'Quit' 25
+# Welcome: Quit. Login gate (no creds): Waiting for approval / ctrl+q  quit.
+.cursor/skills/verify-grog/scripts/drive-tmux.sh wait 'Waiting for approval' 25 \
+  || .cursor/skills/verify-grog/scripts/drive-tmux.sh wait 'Quit' 5
 .cursor/skills/verify-grog/scripts/drive-tmux.sh capture help-before.txt
 .cursor/skills/verify-grog/scripts/drive-tmux.sh type '/help'
 .cursor/skills/verify-grog/scripts/drive-tmux.sh enter
@@ -36,7 +38,7 @@ export VERIFY_RUN_ID=proof-help
 
 Pass: `help-palette.txt` contains `New Session` (palette-only; not the welcome `Quit` menu alone). Side effect: `$GROG_HOME` may gain config/session scaffolding; `~/.grok` must still be untouched.
 
-If the pane never shows `Quit` (stuck authenticating with no TTY login), skip and record the screen; prove [identity-and-home](identity-and-home.md) instead. Do not inject a real xAI key to force the gate open unless the user asked.
+If the pane is the login gate, `/help` may be ignored (keys belong to the auth UI). Skip `/help` with that precondition and prove [identity-and-home](identity-and-home.md). Do not complete browser login or inject a real xAI key unless the user asked.
 
 ## Gotchas
 

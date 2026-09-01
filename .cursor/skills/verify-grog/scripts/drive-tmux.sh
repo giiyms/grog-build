@@ -17,6 +17,12 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 verify_ensure_home
 verify_export_isolation
 
+# capture-pane/send-keys need a pane target. `=session` is a session match
+# (has-session/kill-session) and tmux reports "can't find pane" for capture.
+verify_tmux_pane() {
+  printf '%s:0.0' "${VERIFY_TMUX_SESSION}"
+}
+
 usage() {
   sed -n '2,14p' "$0" | sed 's/^# \?//'
 }
@@ -58,35 +64,38 @@ case "${cmd}" in
     fi
     deadline=$((SECONDS + secs))
     while (( SECONDS < deadline )); do
-      if verify_tmux capture-pane -t "=${VERIFY_TMUX_SESSION}" -p -J | grep -F -q -- "${needle}"; then
+      if verify_tmux capture-pane -t "$(verify_tmux_pane)" -p -J | grep -F -q -- "${needle}"; then
         echo "drive-tmux: saw '${needle}'"
         exit 0
       fi
       sleep 0.25
     done
     echo "drive-tmux: timeout waiting for '${needle}'" >&2
-    verify_tmux capture-pane -t "=${VERIFY_TMUX_SESSION}" -p -J >&2 || true
+    verify_tmux capture-pane -t "$(verify_tmux_pane)" -p -J >&2 || true
     exit 1
     ;;
   type)
-    verify_tmux send-keys -t "=${VERIFY_TMUX_SESSION}" -l "${1:?text}"
+    verify_tmux send-keys -t "$(verify_tmux_pane)" -l "${1:?text}"
     ;;
   enter)
-    verify_tmux send-keys -t "=${VERIFY_TMUX_SESSION}" Enter
+    verify_tmux send-keys -t "$(verify_tmux_pane)" Enter
     ;;
   keys)
-    verify_tmux send-keys -t "=${VERIFY_TMUX_SESSION}" "$1"
+    verify_tmux send-keys -t "$(verify_tmux_pane)" "$1"
     ;;
   capture)
     name="${1:-pane.txt}"
     mkdir -p "${VERIFY_ARTIFACTS}"
     out="${VERIFY_ARTIFACTS}/${name}"
-    verify_tmux capture-pane -t "=${VERIFY_TMUX_SESSION}" -p -J -S - >"${out}"
+    verify_tmux capture-pane -t "$(verify_tmux_pane)" -p -J -S - >"${out}"
     echo "drive-tmux: wrote ${out}"
     ;;
   quit)
-    verify_tmux send-keys -t "=${VERIFY_TMUX_SESSION}" -l "/quit"
-    verify_tmux send-keys -t "=${VERIFY_TMUX_SESSION}" Enter
+    # Welcome accepts /quit; the login gate shows "ctrl+q  quit" instead.
+    verify_tmux send-keys -t "$(verify_tmux_pane)" -l "/quit"
+    verify_tmux send-keys -t "$(verify_tmux_pane)" Enter
+    sleep 0.3
+    verify_tmux send-keys -t "$(verify_tmux_pane)" C-q
     for _ in $(seq 1 40); do
       if ! verify_tmux has-session -t "=${VERIFY_TMUX_SESSION}" 2>/dev/null; then
         echo "drive-tmux: session ended"

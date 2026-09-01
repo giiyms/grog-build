@@ -1,0 +1,1 @@
+user ~/.grog still absent (disposable GROG_HOME used)

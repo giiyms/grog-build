@@ -42,9 +42,9 @@ That script:
 
 **Ready (CLI):** `test -x target/debug/grog` and `./target/debug/grog --version` prints a line starting with `grog ` (see `xai_grok_version::PRODUCT_CLI_NAME`).
 
-**Ready (TUI):** after `scripts/drive-tmux.sh start`, wait until the pane contains `Quit` (welcome / gate menu). Budget ~20s cold. `--no-leader` is required so this process does not elect a shared leader.
+**Ready (TUI):** after `scripts/drive-tmux.sh start`, wait until the pane contains **`Quit`** (authenticated welcome menu; case-sensitive) **or** **`Waiting for approval`** / **`ctrl+q  quit`** (login gate when no xAI/native session exists). Budget ~20s cold. `--no-leader` is required so this process does not elect a shared leader. `drive-tmux.sh` targets `${session}:0.0` (not `=session` — that is a session match and `capture-pane` fails with `can't find pane`).
 
-**Without vendor credentials** the TUI may sit on the login/welcome gate instead of an agent session. `/help`, `/quit`, and `grog --version` / `grog doctor` still work. `/council` live deliberation does **not**.
+**Without vendor credentials** this Linux VM hits the login gate (`Waiting for approval...`), not the welcome `Quit` menu. CLI identity (`grog --version`, `grog doctor`) still works. Do not complete browser login during verification. `/council` live deliberation does **not**.
 
 **TUI argv used by this skill:**
 
@@ -90,7 +90,8 @@ Prefer `scripts/drive-tmux.sh`. Do not drive a tmux session or `$GROG_HOME` you 
 export VERIFY_RUN_ID=…   # same id as launch
 .cursor/skills/verify-grog/scripts/doctor.sh
 .cursor/skills/verify-grog/scripts/drive-tmux.sh start
-.cursor/skills/verify-grog/scripts/drive-tmux.sh wait 'Quit' 25
+.cursor/skills/verify-grog/scripts/drive-tmux.sh wait 'Waiting for approval' 25 \
+  || .cursor/skills/verify-grog/scripts/drive-tmux.sh wait 'Quit' 5
 .cursor/skills/verify-grog/scripts/drive-tmux.sh type '/help'
 .cursor/skills/verify-grog/scripts/drive-tmux.sh enter
 .cursor/skills/verify-grog/scripts/drive-tmux.sh wait 'New Session' 10
