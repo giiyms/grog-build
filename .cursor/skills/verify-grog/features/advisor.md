@@ -7,7 +7,7 @@
 - `/advisor` — toggle enable for this session.
 - `/advisor on` / `/advisor off` — explicit enable/disable (`off` keeps `models.advisor`).
 - `/advisor status` — pretty name + qualified id vs config.
-- `/advisor model` or `/advisor luna` (also `opus`, `sonnet`, `agy`) — persist slot and enable.
+- `/advisor model` or `/advisor luna` (also `fable`, `opus`, `sonnet`, `agy`) — persist slot and enable.
 - Tab on an empty query, or Settings **Advisor model** row — picker targeting advisor, not the session.
 
 ## How to get to it (user POV)

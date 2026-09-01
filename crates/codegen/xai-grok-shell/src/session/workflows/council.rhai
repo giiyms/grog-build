@@ -89,7 +89,7 @@ if query == () || query == "" {
 }
 
 let members = [
-    "claude-bridge/claude-opus-5",
+    "claude-bridge/claude-fable-5-1",
     "antigravity/gemini-3.7-flash-high",
     "codex/gpt-5.6-luna",
 ];

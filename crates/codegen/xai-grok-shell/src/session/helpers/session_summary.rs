@@ -424,6 +424,7 @@ mod tests {
     fn native_title_generation_never_selects_grog_scheme_reqwest_url() {
         for (model, base) in [
             ("codex/gpt-5.6-luna", "grog://codex"),
+            ("claude-bridge/claude-fable-5-1", "grog://claude-bridge"),
             ("claude-bridge/claude-opus-5", "grog://claude-bridge"),
             ("antigravity/gemini-3.7-flash-high", "grog://antigravity"),
         ] {

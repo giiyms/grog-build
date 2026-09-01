@@ -181,6 +181,8 @@ mod tests {
         assert!(!is_native_model("grok-4"));
         assert!(!is_native_model("gpt-5.6-luna"));
         assert!(is_native_model("codex/gpt-5.6-luna"));
+        assert!(is_native_model("claude-bridge/claude-fable-5-1"));
+        assert!(is_native_model("claude-fable-5-1"));
         assert!(is_native_model("claude-bridge/claude-opus-5"));
         assert!(is_native_model("claude-opus-5"));
         assert!(is_native_model("claude-bridge/claude-opus-4-6"));

@@ -201,7 +201,7 @@ pub fn inference_route(model_id: &str, base_url: &str) -> InferenceRoute {
 }
 
 /// Default thinking-effort token for Ask*/council when the caller does not
-/// set one. agy max is `high`; Codex Luna uses `xhigh`; Claude Opus 5 uses
+/// set one. agy max is `high`; Codex Luna uses `xhigh`; Claude Fable 5.1 uses
 /// `medium`.
 pub fn default_effort(model_id: &str) -> Option<&'static str> {
     match ModelRef::parse(model_id).provider {
@@ -303,6 +303,10 @@ mod tests {
             keys.iter()
                 .any(|k| k == grog_claude_bridge::DEFAULT_CLAUDE_QUALIFIED)
         );
+        assert!(keys.iter().any(|k| k == "claude-bridge/claude-fable-5-1"));
+        assert!(keys.iter().any(|k| k == "claude-bridge/claude-fable-5"));
+        assert!(keys.iter().any(|k| k == "claude-bridge/claude-sonnet-5"));
+        assert!(keys.iter().any(|k| k == "claude-bridge/claude-opus-5"));
         assert!(keys.iter().any(|k| k == "claude-bridge/claude-opus-4-6"));
         assert!(
             keys.iter()
@@ -319,8 +323,12 @@ mod tests {
         );
         assert_eq!(keys[0], grog_codex::DEFAULT_CODEX_QUALIFIED);
         assert_eq!(grog_codex::DEFAULT_CODEX_MODEL, "gpt-5.6-luna");
+        assert_ne!(grog_codex::DEFAULT_CODEX_MODEL, "gpt-5.6-sol");
         assert_ne!(grog_codex::DEFAULT_CODEX_MODEL, "gpt-5.3-codex");
         assert_ne!(grog_codex::DEFAULT_CODEX_MODEL, "gpt-5.1-codex");
+        assert!(keys.iter().any(|k| k == "codex/gpt-5.6-sol"));
+        assert!(keys.iter().any(|k| k == "codex/gpt-5.6-terra"));
+        assert!(keys.iter().any(|k| k == "codex/gpt-5.1-codex-max"));
     }
 
     #[test]
@@ -350,6 +358,7 @@ mod tests {
                 grog_claude_bridge::DEFAULT_CLAUDE_QUALIFIED,
                 "grog://claude-bridge",
             ),
+            ("claude-fable-5-1", "grog://claude-bridge"),
             ("claude-opus-5", "grog://claude-bridge"),
             (
                 grog_antigravity::DEFAULT_ANTIGRAVITY_QUALIFIED,
@@ -394,6 +403,7 @@ mod tests {
                 grog_claude_bridge::DEFAULT_CLAUDE_QUALIFIED,
                 "grog://claude-bridge",
             ),
+            ("claude-fable-5-1", "grog://claude-bridge"),
             ("claude-opus-5", "grog://claude-bridge"),
             (
                 grog_antigravity::DEFAULT_ANTIGRAVITY_QUALIFIED,
@@ -415,6 +425,7 @@ mod tests {
             grog_codex::DEFAULT_CODEX_QUALIFIED,
             None
         ));
+        assert!(skip_http_title_generation("claude-fable-5-1", None));
         assert!(skip_http_title_generation("claude-opus-5", None));
         assert!(skip_http_title_generation(
             "antigravity/gemini-3.7-flash-high",

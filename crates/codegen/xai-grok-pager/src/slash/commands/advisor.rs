@@ -38,7 +38,7 @@ impl SlashCommand for AdvisorCommand {
     }
 
     fn usage(&self) -> &str {
-        "/advisor [on|off|status|model|luna|opus|sonnet|agy]"
+        "/advisor [on|off|status|model|luna|fable|opus|sonnet|agy]"
     }
 
     fn takes_args(&self) -> bool {
@@ -87,11 +87,7 @@ impl SlashCommand for AdvisorCommand {
     }
 }
 
-fn persist_and_enable(
-    ctx: &CommandExecCtx<'_>,
-    raw: &str,
-    effort: Option<&str>,
-) -> CommandResult {
+fn persist_and_enable(ctx: &CommandExecCtx<'_>, raw: &str, effort: Option<&str>) -> CommandResult {
     if let Ok(seat) = resolve_spec(raw, effort) {
         let id = ctx
             .models
@@ -127,7 +123,7 @@ fn persist_and_enable(
     }
 
     CommandResult::Error(format!(
-        "unknown advisor model '{raw}'. Try luna, opus, sonnet, agy, or /advisor model"
+        "unknown advisor model '{raw}'. Try luna, fable, opus, sonnet, agy, or /advisor model"
     ))
 }
 

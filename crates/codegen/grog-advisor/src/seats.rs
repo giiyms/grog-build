@@ -16,9 +16,9 @@ pub struct AdvisorSeat {
 
 impl AdvisorSeat {
     pub fn effort_token(&self) -> Option<String> {
-        self.effort.clone().or_else(|| {
-            grog_providers::default_effort(&self.qualified).map(str::to_string)
-        })
+        self.effort
+            .clone()
+            .or_else(|| grog_providers::default_effort(&self.qualified).map(str::to_string))
     }
 
     pub fn provider(&self) -> ProviderId {
@@ -55,9 +55,18 @@ pub fn luna() -> AdvisorSeat {
     }
 }
 
-pub fn opus() -> AdvisorSeat {
+pub fn fable() -> AdvisorSeat {
     AdvisorSeat {
         qualified: grog_providers::grog_claude_bridge::DEFAULT_CLAUDE_QUALIFIED.to_string(),
+        short_name: "fable".into(),
+        display_name: "Fable 5.1".into(),
+        effort: None,
+    }
+}
+
+pub fn opus() -> AdvisorSeat {
+    AdvisorSeat {
+        qualified: "claude-bridge/claude-opus-5".into(),
         short_name: "opus".into(),
         display_name: "Opus 5".into(),
         effort: None,
@@ -97,7 +106,7 @@ fn version_key(id: &str) -> Vec<u32> {
 
 /// Cycle order: distinct models Daniel cares about, not one-per-provider.
 pub fn cycle_seats() -> Vec<AdvisorSeat> {
-    let mut seats = vec![luna(), opus()];
+    let mut seats = vec![luna(), fable(), opus()];
     if let Some(sonnet) = catalog_sonnet() {
         seats.push(sonnet);
     }
@@ -128,10 +137,12 @@ pub fn normalize_alias(raw: &str) -> String {
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ResolveError {
-    #[error("unknown advisor model '{0}'. Try luna, opus, sonnet, claude, codex, agy, or a qualified id like codex/gpt-5.6-luna")]
+    #[error(
+        "unknown advisor model '{0}'. Try luna, fable, opus, sonnet, claude, codex, agy, or a qualified id like codex/gpt-5.6-luna"
+    )]
     Unknown(String),
     #[error(
-        "no Sonnet model is in grog's Claude catalog; pick opus, luna, or agy, or a qualified id"
+        "no Sonnet model is in grog's Claude catalog; pick fable, opus, luna, or agy, or a qualified id"
     )]
     SonnetMissing,
 }
@@ -149,15 +160,18 @@ pub fn resolve_short_name(raw: &str) -> Result<AdvisorSeat, ResolveError> {
     match key.as_str() {
         "luna" | "5 6" | "56" | "gpt 5 6" | "gpt 56" | "gpt 5 6 luna" | "gpt56luna"
         | "gpt 5 6 luna xhigh" => Ok(luna()),
+        "fable" | "fable 5 1" | "fable51" | "claude fable" | "claude fable 5 1"
+        | "claudefable51" => Ok(fable()),
         "opus" | "opus 5" | "opus5" | "claude opus 5" | "claudeopus5" => Ok(opus()),
-        "sonnet" | "sonnet 4 6" | "sonnet46" | "claude sonnet" | "claude sonnet 4 6" => {
-            catalog_sonnet().ok_or(ResolveError::SonnetMissing)
+        "sonnet" | "claude sonnet" => catalog_sonnet().ok_or(ResolveError::SonnetMissing),
+        "sonnet 4 6" | "sonnet46" | "claude sonnet 4 6" => {
+            Ok(seat_from_qualified("claude-bridge/claude-sonnet-4-6"))
         }
-        "claude" => Ok(opus()),
+        "claude" => Ok(fable()),
         "codex" => Ok(luna()),
         "agy" | "gemini" | "flash" | "antigravity" => Ok(agy()),
         other => {
-            // Bare catalog ids: claude-opus-5, gpt-5.6-luna, gemini-3.7-flash-high.
+            // Bare catalog ids: claude-fable-5-1, gpt-5.6-luna, gemini-3.7-flash-high.
             let parsed = ModelRef::parse(trimmed);
             if parsed.provider != ProviderId::Http || trimmed.contains("grok") {
                 return Ok(seat_from_qualified(&parsed.qualified()));
@@ -226,11 +240,11 @@ pub fn complement_seat(primary_model: &str) -> AdvisorSeat {
     let provider = ModelRef::parse(primary_model).provider;
     match provider {
         ProviderId::ClaudeBridge => luna(),
-        ProviderId::Codex | ProviderId::Antigravity | ProviderId::Http => opus(),
+        ProviderId::Codex | ProviderId::Antigravity | ProviderId::Http => fable(),
     }
 }
 
-/// Walk luna → opus → sonnet → agy, skipping seats on the primary's provider.
+/// Walk luna → fable → opus → sonnet → agy, skipping seats on the primary's provider.
 pub fn cycle_seat(current: Option<&AdvisorSeat>, primary_model: &str) -> AdvisorSeat {
     let seats = cycle_seats();
     let primary_p = ModelRef::parse(primary_model).provider;
@@ -256,13 +270,7 @@ pub fn seat_readiness(seat: &AdvisorSeat) -> Option<String> {
     grog_providers::doctor::doctor_checks()
         .into_iter()
         .find(|c| c.provider == want)
-        .and_then(|c| {
-            if c.ok {
-                None
-            } else {
-                Some(c.detail)
-            }
-        })
+        .and_then(|c| if c.ok { None } else { Some(c.detail) })
 }
 
 #[cfg(test)]
@@ -290,6 +298,27 @@ mod tests {
     }
 
     #[test]
+    fn fable_aliases_resolve_to_fable_51() {
+        for raw in [
+            "fable",
+            "Fable",
+            "fable-5.1",
+            "fable 5.1",
+            "claude-fable-5-1",
+            "claude-bridge/claude-fable-5-1",
+        ] {
+            let seat = resolve_short_name(raw).unwrap_or_else(|e| panic!("{raw}: {e}"));
+            assert_eq!(
+                seat.qualified, "claude-bridge/claude-fable-5-1",
+                "raw={raw}"
+            );
+            assert_eq!(seat.short_name, "fable", "raw={raw}");
+            assert_eq!(seat.display_name, "Fable 5.1", "raw={raw}");
+            assert_eq!(seat.effort_token().as_deref(), Some("medium"));
+        }
+    }
+
+    #[test]
     fn opus_aliases() {
         for raw in ["opus", "opus 5", "opus-5", "claude-opus-5", "OPUS"] {
             let seat = resolve_short_name(raw).expect(raw);
@@ -297,27 +326,35 @@ mod tests {
             assert_eq!(seat.short_name, "opus");
             assert_eq!(seat.display_name, "Opus 5");
             assert_eq!(seat.effort_token().as_deref(), Some("medium"));
+            assert_ne!(seat.qualified, fable().qualified);
         }
     }
 
     #[test]
     fn sonnet_resolves_to_catalog_slug_not_opus() {
         let seat = resolve_short_name("sonnet").expect("sonnet must exist in this tree");
-        assert_eq!(seat.qualified, "claude-bridge/claude-sonnet-4-6");
+        assert_eq!(seat.qualified, "claude-bridge/claude-sonnet-5");
         assert_eq!(seat.short_name, "sonnet");
-        assert_eq!(seat.display_name, "Sonnet 4.6");
+        assert_eq!(seat.display_name, "Sonnet 5");
         assert_ne!(seat.qualified, opus().qualified);
+        assert_ne!(seat.qualified, fable().qualified);
         assert!(
             grog_providers::grog_claude_bridge::CLAUDE_BRIDGE_MODELS
                 .iter()
-                .any(|m| m.id == "claude-sonnet-4-6"),
-            "test pins the catalog slug actually in grog-claude-bridge"
+                .any(|m| m.id == "claude-sonnet-5"),
+            "test pins the newest sonnet slug actually in grog-claude-bridge"
         );
+        let older = resolve_short_name("sonnet-4.6").expect("versioned 4.6 alias");
+        assert_eq!(older.qualified, "claude-bridge/claude-sonnet-4-6");
     }
 
     #[test]
     fn family_aliases() {
-        assert_eq!(resolve_short_name("claude").unwrap().short_name, "opus");
+        assert_eq!(resolve_short_name("claude").unwrap().short_name, "fable");
+        assert_eq!(
+            resolve_short_name("claude").unwrap().qualified,
+            grog_providers::grog_claude_bridge::DEFAULT_CLAUDE_QUALIFIED
+        );
         assert_eq!(resolve_short_name("codex").unwrap().short_name, "luna");
         assert_eq!(resolve_short_name("agy").unwrap().short_name, "agy");
         assert_eq!(resolve_short_name("gemini").unwrap().short_name, "agy");
@@ -334,6 +371,8 @@ mod tests {
         assert_eq!(seat.short_name, "luna");
         let seat = resolve_short_name("claude-bridge/claude-opus-5").unwrap();
         assert_eq!(seat.short_name, "opus");
+        let seat = resolve_short_name("claude-bridge/claude-fable-5-1").unwrap();
+        assert_eq!(seat.short_name, "fable");
     }
 
     #[test]
@@ -348,14 +387,18 @@ mod tests {
 
     #[test]
     fn complement_never_matches_primary_provider() {
-        assert_eq!(complement_seat("grok-4").short_name, "opus");
-        assert_eq!(complement_seat("grok-4").provider(), ProviderId::ClaudeBridge);
+        assert_eq!(complement_seat("grok-4").short_name, "fable");
         assert_eq!(
-            complement_seat("codex/gpt-5.6-luna").short_name,
-            "opus"
+            complement_seat("grok-4").provider(),
+            ProviderId::ClaudeBridge
         );
+        assert_eq!(complement_seat("codex/gpt-5.6-luna").short_name, "fable");
         assert_eq!(
             complement_seat("claude-bridge/claude-opus-5").short_name,
+            "luna"
+        );
+        assert_eq!(
+            complement_seat("claude-bridge/claude-fable-5-1").short_name,
             "luna"
         );
         assert_eq!(
@@ -364,11 +407,12 @@ mod tests {
         );
         assert_eq!(
             complement_seat("antigravity/gemini-3.7-flash-high").short_name,
-            "opus"
+            "fable"
         );
         for primary in [
             "grok-4",
             "codex/gpt-5.6-luna",
+            "claude-bridge/claude-fable-5-1",
             "claude-bridge/claude-opus-5",
             "antigravity/gemini-3.7-flash-high",
         ] {
@@ -383,6 +427,8 @@ mod tests {
     #[test]
     fn cycle_skips_primary_provider() {
         let next = cycle_seat(Some(&luna()), "grok-4");
+        assert_eq!(next.short_name, "fable");
+        let next = cycle_seat(Some(&fable()), "grok-4");
         assert_eq!(next.short_name, "opus");
         let next = cycle_seat(Some(&opus()), "grok-4");
         assert_eq!(next.short_name, "sonnet");
@@ -391,10 +437,12 @@ mod tests {
         let next = cycle_seat(Some(&agy()), "grok-4");
         assert_eq!(next.short_name, "luna");
 
-        // Primary is Claude: skip opus and sonnet.
+        // Primary is Claude: skip fable, opus, and sonnet.
         let next = cycle_seat(Some(&luna()), "claude-bridge/claude-opus-5");
         assert_eq!(next.short_name, "agy");
         assert_ne!(next.provider(), ProviderId::ClaudeBridge);
+        let next = cycle_seat(Some(&luna()), "claude-bridge/claude-fable-5-1");
+        assert_eq!(next.short_name, "agy");
         let next = cycle_seat(Some(&agy()), "claude-opus-5");
         assert_eq!(next.short_name, "luna");
 

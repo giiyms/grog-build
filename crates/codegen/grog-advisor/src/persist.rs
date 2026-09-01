@@ -69,30 +69,23 @@ mod tests {
 
     #[test]
     fn prefer_config_when_different_provider() {
-        let (seat, src) = prefer_config_or_complement(
-            Some("codex/gpt-5.6-luna"),
-            None,
-            "grok-4",
-        );
+        let (seat, src) = prefer_config_or_complement(Some("codex/gpt-5.6-luna"), None, "grok-4");
         assert_eq!(seat.short_name, "luna");
         assert_eq!(src, SeatSource::Config);
     }
 
     #[test]
     fn prefer_complement_when_config_matches_primary_provider() {
-        let (seat, src) = prefer_config_or_complement(
-            Some("codex/gpt-5.6-luna"),
-            None,
-            "codex/gpt-5.6-luna",
-        );
-        assert_eq!(seat.short_name, "opus");
+        let (seat, src) =
+            prefer_config_or_complement(Some("codex/gpt-5.6-luna"), None, "codex/gpt-5.6-luna");
+        assert_eq!(seat.short_name, "fable");
         assert_eq!(src, SeatSource::Complement);
     }
 
     #[test]
     fn prefer_complement_when_unset() {
         let (seat, src) = prefer_config_or_complement(None, None, "grok-4");
-        assert_eq!(seat.short_name, "opus");
+        assert_eq!(seat.short_name, "fable");
         assert_eq!(src, SeatSource::Complement);
     }
 }
