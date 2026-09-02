@@ -75,6 +75,7 @@ fn registered_settings() {
                 "repo_status_in_system_prompt",
                 ("GROK_REPO_STATUS_IN_SYSTEM_PROMPT", true),
             ),
+            ("dock", ("GROK_DOCK", false)),
         ]),
     );
 }
@@ -105,6 +106,7 @@ fn every_registered_feature_reads_its_own_remote_setting() {
             Feature::RepoStatusInSystemPrompt => {
                 settings.repo_status_in_system_prompt = Some(value)
             }
+            Feature::Dock => settings.dock_enabled = Some(value),
             // No remote tier: grog does not let xAI settings enable data-sharing
             // features, and `backend_tools` never had one.
             Feature::Feedback | Feature::FeedbackTraceCard | Feature::BackendTools => {
