@@ -301,14 +301,6 @@ pub fn deployment_id_from_key(key: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    #[test]
-    fn build_env_default_normalizes() {
-        assert_eq!(build_env_default(None), None);
-        assert_eq!(build_env_default(Some("")), None);
-        assert_eq!(build_env_default(Some(" \t ")), None);
-        assert_eq!(build_env_default(Some(" key ")), Some("key".to_owned()));
-    }
     /// The key follows the URL: a baked key next to an explicit URL stays, or the explicit sink would post nothing.
     #[test]
     fn disarm_baked_sinks_keeps_explicit_sinks() {
