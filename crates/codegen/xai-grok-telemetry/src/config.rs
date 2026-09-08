@@ -2,7 +2,6 @@
 //!
 //! Shell still re-exports these types from their original paths so existing call sites (and `Config` derive impls) compile unchanged.
 use serde::{Deserialize, Serialize};
-use xai_grok_env::env_bool;
 /// Telemetry mode: `true`/`false` (legacy bool) or `"session_metrics"` (string). `Disabled`: nothing sent (enterprise
 /// default); `SessionMetrics`: metadata-only lifecycle events, no content; `Enabled`: full product telemetry (events and
 /// Mixpanel).
