@@ -2,11 +2,10 @@
 //!
 //! Shell still re-exports these types from their original paths so existing call sites (and `Config` derive impls) compile unchanged.
 use serde::{Deserialize, Serialize};
-/// Telemetry mode: `true`/`false` (legacy bool) or `"session_metrics"` (string).
-///
-/// - `Disabled`: nothing sent (enterprise default)
-/// - `SessionMetrics`: metadata-only lifecycle events, no content
-/// - `Enabled`: full product telemetry (events and Mixpanel)
+use xai_grok_env::env_bool;
+/// Telemetry mode: `true`/`false` (legacy bool) or `"session_metrics"` (string). `Disabled`: nothing sent (enterprise
+/// default); `SessionMetrics`: metadata-only lifecycle events, no content; `Enabled`: full product telemetry (events and
+/// Mixpanel).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TelemetryMode {
     #[default]
@@ -134,7 +133,6 @@ pub struct TelemetryConfig {
     pub mixpanel_enabled: bool,
     /// `None` inherits from `[features] telemetry`; `Some(false)` disables GCS uploads only.
     pub trace_upload: Option<bool>,
-    /// External OTEL master switch (env `GROK_EXTERNAL_OTEL` wins).
     pub otel_enabled: Option<bool>,
     /// External OTEL metrics exporter: `otlp` | `console` | `none`.
     pub otel_metrics_exporter: Option<String>,
@@ -225,6 +223,26 @@ pub fn env_telemetry_mode_grog_or_grok() -> Option<TelemetryMode> {
 }
 
 impl TelemetryConfig {
+    /// Clears every sink still carrying its baked `internal-telemetry-defaults` value; the events
+    /// key follows the URL, so an explicit URL keeps a baked key. Returns whether anything was cleared.
+    pub(crate) fn disarm_baked_sinks(&mut self) -> bool {
+        let (baked_url, _, baked_token, _) = internal_defaults();
+        let events_cleared = self
+            .events_url
+            .take_if(|url| baked_url.as_deref() == Some(url.as_str()))
+            .is_some();
+        if events_cleared {
+            self.events_api_key = None;
+        }
+        let token_cleared = self
+            .mixpanel_token
+            .take_if(|token| baked_token.as_deref() == Some(token.as_str()))
+            .is_some();
+        if token_cleared {
+            self.mixpanel_enabled = false;
+        }
+        events_cleared || token_cleared
+    }
     pub fn apply_env_overrides(&mut self) {
         self.normalize();
         if let Some(value) = Self::env_override_grog_or_grok("GROK_TELEMETRY_EVENTS_URL") {
@@ -283,6 +301,43 @@ pub fn deployment_id_from_key(key: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    #[test]
+    fn build_env_default_normalizes() {
+        assert_eq!(build_env_default(None), None);
+        assert_eq!(build_env_default(Some("")), None);
+        assert_eq!(build_env_default(Some(" \t ")), None);
+        assert_eq!(build_env_default(Some(" key ")), Some("key".to_owned()));
+    }
+    /// The key follows the URL: a baked key next to an explicit URL stays, or the explicit sink would post nothing.
+    #[test]
+    fn disarm_baked_sinks_keeps_explicit_sinks() {
+        let mut cfg = TelemetryConfig {
+            events_url: Some("http://127.0.0.1:9/events".into()),
+            mixpanel_token: Some("explicit-token".into()),
+            mixpanel_enabled: true,
+            ..TelemetryConfig::default()
+        };
+        let key_before = cfg.events_api_key.clone();
+        assert!(
+            !cfg.disarm_baked_sinks(),
+            "explicit sinks must not count as cleared"
+        );
+        assert_eq!(
+            (
+                cfg.events_url.as_deref(),
+                cfg.events_api_key == key_before,
+                cfg.mixpanel_token.as_deref(),
+                cfg.mixpanel_enabled
+            ),
+            (
+                Some("http://127.0.0.1:9/events"),
+                true,
+                Some("explicit-token"),
+                true
+            )
+        );
+    }
     #[test]
     fn default_ships_no_xai_telemetry_endpoints() {
         let cfg = TelemetryConfig::default();
