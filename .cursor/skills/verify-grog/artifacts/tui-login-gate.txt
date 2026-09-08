@@ -1,5 +1,5 @@
 
-   cursor/add-verify-grog-skill-fe9b /workspace
+   cursor/rebase-dump-eb4a894d-9086 /workspace
 
 
 
@@ -14,7 +14,7 @@
 
                                       Approve in your browser to finish signing in.
 
-                                                        GQRA-GD8X
+                                                        NK4Y-CRPG
 
                                          Make sure your browser shows this code.
 
