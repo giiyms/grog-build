@@ -1,1 +1,1 @@
-1788881466 /home/ubuntu/.grog
+user ~/.grog exists; not selected (GROG_HOME override)
