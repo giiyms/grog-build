@@ -1,5 +1,5 @@
 
-   cursor/rebase-dump-c4ea71cf-ce8f /workspace
+   cursor/rebase-dump-be7ce6e8-5134 /workspace
 
 
 
@@ -14,7 +14,7 @@
 
                                       Approve in your browser to finish signing in.
 
-                                                        YQHT-NR3J
+                                                        8VPZ-9GB3
 
                                          Make sure your browser shows this code.
 
