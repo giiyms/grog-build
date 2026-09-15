@@ -1,10 +1,10 @@
 verify-grog doctor
-  RUN_ID:    proof-c4ea71cf
-  GROG_HOME: /tmp/grog-verify-proof-c4ea71cf
+  RUN_ID:    proof-be7ce6e8
+  GROG_HOME: /tmp/grog-verify-proof-be7ce6e8
   bin:       /workspace/target/debug/grog
-  --version: grog 1.0.24 (9b25810e0ad6)
+  --version: grog 1.0.32 (6db81df84894)
 OK  identity is grog (not grok)
-OK  GROG_HOME is owned by this run (/tmp/grog-verify-proof-c4ea71cf/.verify-grog-owned)
+OK  GROG_HOME is owned by this run (/tmp/grog-verify-proof-be7ce6e8/.verify-grog-owned)
 OK  official grok home /home/ubuntu/.grok is absent
-INFO no tmux session grog-verify-proof-c4ea71cf — CLI drives do not need one
+INFO no tmux session grog-verify-proof-be7ce6e8 — CLI drives do not need one
 verify-grog doctor: READY
