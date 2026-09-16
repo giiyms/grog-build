@@ -13,5 +13,8 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "sync"] }
 xai-dirs = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [lints]
 workspace = true

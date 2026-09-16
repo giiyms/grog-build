@@ -3461,8 +3461,9 @@ fn merge_grog_native_catalog(
         }
         let mut model = ModelEntry::fallback(&key, endpoints);
         model.info.id = Some(key.clone());
-        model.info.model = entry.id.to_string();
-        model.info.name = Some(entry.display_name.to_string());
+        model.info.model = entry.id.clone();
+        model.info.name = Some(entry.display_name.clone());
+        model.info.description = Some(grog_providers::source_label(&key).to_string());
         model.info.model_family = Some(entry.provider.as_str().to_string());
         model.info.base_url = format!("grog://{}", entry.provider.as_str());
         model.info.user_selectable = true;

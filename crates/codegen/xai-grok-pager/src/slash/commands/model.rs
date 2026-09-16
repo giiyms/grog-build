@@ -10,6 +10,9 @@ use crate::slash::command::{
     AppCtx, ArgItem, CommandExecCtx, CommandResult, SlashCommand, slash_meta,
 };
 use crate::slash::commands::effort_levels::build_effort_arg_items;
+use crate::views::modal::ModelPickerTarget;
+use grog_providers::source_label;
+use grog_providers::visibility::{self, HiddenSet};
 
 /// Switch the active model (and optionally its reasoning effort).
 pub struct ModelCommand;
@@ -17,11 +20,11 @@ pub struct ModelCommand;
 impl SlashCommand for ModelCommand {
     slash_meta! {
         name: "model",
-        aliases: ["m"],
+        aliases: ["m", "models"],
         description: "Switch the active model",
-        usage: "/model <name> [effort]",
+        usage: "/model [hide|unhide|hidden|show-hidden|<name>] [effort]",
         takes_args: true,
-        args_required: true,
+        args_required: false,
         session_scoped: true,
         // The dashboard offers `/model` to pick the model for the next spawned agent (intercepted in `dispatch_dashboard_dispatch_slash`).
         offered_when_session_less: true,
@@ -43,7 +46,25 @@ impl SlashCommand for ModelCommand {
     fn run(&self, ctx: &mut CommandExecCtx, args: &str) -> CommandResult {
         let trimmed = args.trim();
         if trimmed.is_empty() {
-            return CommandResult::Error("Usage: /model <name> [effort]".into());
+            return CommandResult::Action(Action::OpenModelPicker {
+                target: ModelPickerTarget::Session,
+            });
+        }
+
+        let (verb, rest) = split_leading_verb(trimmed);
+        match verb {
+            "hide" => return hide_model(ctx.models, rest),
+            "unhide" => return unhide_model(ctx.models, rest),
+            "hidden" => return list_hidden(),
+            "show-hidden" | "showhidden" => {
+                let on = visibility::toggle_show_hidden();
+                return CommandResult::Message(if on {
+                    "Showing hidden models in the picker.".into()
+                } else {
+                    "Hidden models omitted from the picker.".into()
+                });
+            }
+            _ => {}
         }
 
         // Prefer an exact full-string catalog match first. Model display names often contain spaces ("Grok 4.5").
@@ -126,17 +147,38 @@ fn detect_effort_phase(models: &ModelState, args_query: &str) -> Option<acp::Mod
 /// One row per logical model.
 /// Reasoning models get a trailing space in `insert_text` so the prompt widget chains into the effort sub-menu.
 fn build_model_items(models: &ModelState) -> Vec<ArgItem> {
+    build_model_items_filtered(
+        models,
+        &visibility::load_hidden_from_grog_home(),
+        visibility::show_hidden(),
+    )
+}
+
+pub(crate) fn build_model_items_filtered(
+    models: &ModelState,
+    hidden: &HiddenSet,
+    show_hidden: bool,
+) -> Vec<ArgItem> {
     let current_id = models.current.as_ref();
     let mut items: Vec<ArgItem> = Vec::with_capacity(models.available.len());
     for (id, info) in &models.available {
+        let catalog_key = id.0.as_ref();
+        let is_hidden = hidden.contains(catalog_key);
+        if is_hidden && !show_hidden {
+            continue;
+        }
+        let source = source_label(catalog_key);
         let is_current = current_id == Some(id);
         let supports = supports_reasoning_effort(info);
 
-        let display = if is_current {
+        let mut display = if is_current {
             format!("{} (current)", info.name)
         } else {
             info.name.clone()
         };
+        if is_hidden {
+            display.push_str(" (hidden)");
+        }
 
         // A trailing space on reasoning models signals "more input expected" to the prompt widget
         // Enter then advances to the effort phase instead of submitting
@@ -148,12 +190,71 @@ fn build_model_items(models: &ModelState) -> Vec<ArgItem> {
 
         items.push(ArgItem {
             display,
-            match_text: info.name.clone(),
+            match_text: format!("{} {} {catalog_key}", info.name, source),
             insert_text,
-            description: info.description.clone().unwrap_or_default(),
+            description: source.to_string(),
         });
     }
     items
+}
+
+fn split_leading_verb(args: &str) -> (&str, &str) {
+    match args.split_once(char::is_whitespace) {
+        Some((verb, rest)) => (verb, rest.trim()),
+        None => (args, ""),
+    }
+}
+
+fn hide_model(models: &ModelState, raw: &str) -> CommandResult {
+    let Some(id) = resolve_hide_target(models, raw) else {
+        return CommandResult::Error("Usage: /model hide <name>".into());
+    };
+    let key = id.0.to_string();
+    let mut hidden = visibility::load_hidden_from_grog_home();
+    hidden.hide(&key);
+    if let Err(err) = visibility::persist_hidden_to_grog_home(&hidden) {
+        return CommandResult::Error(format!("could not persist hidden models: {err}"));
+    }
+    CommandResult::Message(format!("Hid {key} from the picker."))
+}
+
+fn unhide_model(models: &ModelState, raw: &str) -> CommandResult {
+    let key = if let Some(id) = resolve_hide_target(models, raw) {
+        id.0.to_string()
+    } else if !raw.is_empty() {
+        raw.to_string()
+    } else {
+        return CommandResult::Error("Usage: /model unhide <name>".into());
+    };
+    let mut hidden = visibility::load_hidden_from_grog_home();
+    hidden.unhide(&key);
+    if let Err(err) = visibility::persist_hidden_to_grog_home(&hidden) {
+        return CommandResult::Error(format!("could not persist hidden models: {err}"));
+    }
+    CommandResult::Message(format!("Unhid {key}."))
+}
+
+fn list_hidden() -> CommandResult {
+    let hidden = visibility::load_hidden_from_grog_home();
+    if hidden.is_empty() {
+        return CommandResult::Message("No hidden models.".into());
+    }
+    let mut lines = String::from("Hidden models:\n");
+    for id in hidden.iter() {
+        lines.push_str("  ");
+        lines.push_str(id);
+        lines.push('\n');
+    }
+    lines.push_str("Unhide with /model unhide <id>, or /model show-hidden to preview.");
+    CommandResult::Message(lines)
+}
+
+fn resolve_hide_target(models: &ModelState, raw: &str) -> Option<acp::ModelId> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    models.resolve_by_name_or_id(trimmed)
 }
 
 /// One row per effort level for the `/model` chained effort phase.
@@ -267,13 +368,17 @@ mod tests {
         // The prompt widget reads it to keep the dropdown open after Enter so the effort sub-menu can render
         let reasoning = items
             .iter()
-            .find(|i| i.match_text == "Reasoning X")
+            .find(|i| i.match_text.contains("Reasoning X"))
             .unwrap();
         assert_eq!(reasoning.insert_text, "Reasoning X ");
 
         // A plain model has no trailing space, so Enter commits immediately
-        let plain = items.iter().find(|i| i.match_text == "Grok 4.5").unwrap();
+        let plain = items
+            .iter()
+            .find(|i| i.match_text.contains("Grok 4.5"))
+            .unwrap();
         assert_eq!(plain.insert_text, "Grok 4.5");
+        assert_eq!(plain.description, "Grok");
     }
 
     #[test]
@@ -474,6 +579,74 @@ mod tests {
                 assert_eq!(resolved_id, id);
             }
             other => panic!("expected Action::SetDefaultModel(<id>), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn picker_rows_include_source_labels() {
+        let mut state = ModelState::default();
+        let (gid, ginfo) = plain_model("grok-4.6", "Grok 4.6");
+        let (cid, cinfo) = plain_model("claude-bridge/claude-fable-5-1", "Fable 5.1");
+        let (aid, ainfo) =
+            plain_model("antigravity/gemini-3.8-flash-high", "Gemini 3.8 Flash High");
+        let (xid, xinfo) = plain_model("codex/gpt-5.6-luna", "GPT-5.6 Luna");
+        let (oid, oinfo) = plain_model("local-llama", "Local Llama");
+        state.available.insert(gid, ginfo);
+        state.available.insert(cid, cinfo);
+        state.available.insert(aid, ainfo);
+        state.available.insert(xid, xinfo);
+        state.available.insert(oid, oinfo);
+        let hidden = HiddenSet::from_text("");
+        let items = build_model_items_filtered(&state, &hidden, false);
+        let desc = |name: &str| {
+            items
+                .iter()
+                .find(|i| i.display == name)
+                .map(|i| i.description.as_str())
+                .unwrap_or("")
+        };
+        assert_eq!(desc("Grok 4.6"), "Grok");
+        assert_eq!(desc("Fable 5.1"), "Claude");
+        assert_eq!(desc("Gemini 3.8 Flash High"), "Antigravity");
+        assert_eq!(desc("GPT-5.6 Luna"), "Codex");
+        assert_eq!(desc("Local Llama"), "Custom");
+        assert!(items.iter().any(|i| i.match_text.contains("Antigravity")
+            && i.match_text.contains("gemini-3.8-flash-high")));
+    }
+
+    #[test]
+    fn hide_filters_picker_and_unhide_restores() {
+        let mut state = ModelState::default();
+        let (keep_id, keep_info) = plain_model("grok-4.6", "Grok 4.6");
+        let (hide_id, hide_info) = plain_model("antigravity/gemini-3.6-flash", "Gemini 3.6 Flash");
+        state.available.insert(keep_id, keep_info);
+        state.available.insert(hide_id, hide_info);
+        let mut hidden = HiddenSet::from_text("");
+        hidden.hide("antigravity/gemini-3.6-flash");
+        let filtered = build_model_items_filtered(&state, &hidden, false);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].display, "Grok 4.6");
+        let preview = build_model_items_filtered(&state, &hidden, true);
+        assert_eq!(preview.len(), 2);
+        assert!(
+            preview
+                .iter()
+                .any(|i| i.display.contains("(hidden)") && i.description == "Antigravity")
+        );
+        hidden.unhide("antigravity/gemini-3.6-flash");
+        let restored = build_model_items_filtered(&state, &hidden, false);
+        assert_eq!(restored.len(), 2);
+    }
+
+    #[test]
+    fn empty_model_command_opens_session_picker() {
+        let state = ModelState::default();
+        let mut ctx = dummy_exec_ctx(&state);
+        match ModelCommand.run(&mut ctx, "") {
+            CommandResult::Action(Action::OpenModelPicker { target }) => {
+                assert_eq!(target, ModelPickerTarget::Session);
+            }
+            other => panic!("expected OpenModelPicker, got {other:?}"),
         }
     }
 }

@@ -12,7 +12,9 @@ pub mod spawn;
 pub use consult::{ConsultError, ConsultResult, ask_agy, provider_turn, run_print_plan};
 pub use models::{
     ANTIGRAVITY_FALLBACK_MODELS, AntigravityModel, DEFAULT_ANTIGRAVITY_EFFORT,
-    DEFAULT_ANTIGRAVITY_MODEL, DEFAULT_ANTIGRAVITY_QUALIFIED, agy_effort_flag, slugify_model,
+    DEFAULT_ANTIGRAVITY_MODEL, DEFAULT_ANTIGRAVITY_QUALIFIED, ListedAntigravityModel,
+    agy_effort_flag, listed_models, parse_agy_models_output, slugify_model,
+    try_discover_agy_models,
 };
 pub use protobuf::{
     DecodedStep, Field, ProtobufError, ToolCall, extract_agent_text, extract_title,

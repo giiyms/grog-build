@@ -114,6 +114,7 @@ xai-grok-voice = { path = "../xai-grok-voice", default-features = false, feature
 xai-grok-login = { workspace = true }
 xai-grok-shell = { workspace = true }
 grog-advisor = { path = "../grog-advisor" }
+grog-providers = { path = "../grog-providers" }
 grog-update = { path = "../grog-update" }
 # The status-line contract: the config the user writes and the payload the
 # agent sends. A leaf crate rather than the agent's, so the client reads it

@@ -53,7 +53,9 @@ impl AgentView {
         else {
             return false;
         };
-        if args_query.is_empty() || !matches!(command.as_str(), "model" | "m" | "advisor") {
+        if args_query.is_empty()
+            || !matches!(command.as_str(), "model" | "m" | "models" | "advisor")
+        {
             return false;
         }
         let command = command.clone();
@@ -141,6 +143,114 @@ impl AgentView {
             *cur_items = items.clone();
             *original_items = items;
             *state = crate::views::picker::PickerState::input_active();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn try_model_picker_visibility_key(&mut self, key: &KeyEvent) -> bool {
+        if !key.modifiers.contains(KeyModifiers::CONTROL)
+            || key.modifiers.contains(KeyModifiers::ALT)
+            || key.modifiers.contains(KeyModifiers::SHIFT)
+        {
+            return false;
+        }
+        let hide = matches!(key.code, KeyCode::Char('h') | KeyCode::Char('H'));
+        let toggle = matches!(key.code, KeyCode::Char('o') | KeyCode::Char('O'));
+        if !hide && !toggle {
+            return false;
+        }
+        let selected_name = {
+            let Some(ActiveModal::ArgPicker {
+                command,
+                args_query,
+                items,
+                state,
+                ..
+            }) = self.active_modal.as_ref()
+            else {
+                return false;
+            };
+            if !args_query.is_empty()
+                || !matches!(command.as_str(), "model" | "m" | "models" | "advisor")
+            {
+                return false;
+            }
+            if toggle {
+                None
+            } else {
+                items
+                    .get(state.selected)
+                    .map(|item| item.insert_text.trim().to_string())
+            }
+        };
+        if toggle {
+            grog_providers::visibility::toggle_show_hidden();
+            return self.rebuild_model_arg_picker();
+        }
+        let Some(name) = selected_name else {
+            return false;
+        };
+        let Some(id) = self.session.models.resolve_by_name_or_id(&name) else {
+            return false;
+        };
+        let key = id.0.to_string();
+        let mut hidden = grog_providers::visibility::load_hidden_from_grog_home();
+        if hidden.contains(&key) {
+            hidden.unhide(&key);
+        } else {
+            hidden.hide(&key);
+        }
+        if grog_providers::visibility::persist_hidden_to_grog_home(&hidden).is_err() {
+            return false;
+        }
+        self.rebuild_model_arg_picker()
+    }
+
+    fn rebuild_model_arg_picker(&mut self) -> bool {
+        let Some(ActiveModal::ArgPicker {
+            command,
+            args_query,
+            state,
+            ..
+        }) = self.active_modal.as_ref()
+        else {
+            return false;
+        };
+        if !args_query.is_empty() {
+            return false;
+        }
+        let command = command.clone();
+        let query = state.query().to_lowercase();
+        let Some(cmd) = self.prompt.slash_controller.registry().get(&command) else {
+            return false;
+        };
+        let ctx = self.prompt.slash_controller.app_ctx(&self.session.models);
+        let Some(fresh) = cmd.suggest_args(&ctx, "") else {
+            return false;
+        };
+        if let Some(ActiveModal::ArgPicker {
+            items,
+            original_items,
+            state,
+            ..
+        }) = self.active_modal.as_mut()
+        {
+            *original_items = fresh.clone();
+            *items = if query.is_empty() {
+                fresh
+            } else {
+                fresh
+                    .into_iter()
+                    .filter(|item| {
+                        item.match_text.to_lowercase().contains(&query)
+                            || item.display.to_lowercase().contains(&query)
+                            || item.description.to_lowercase().contains(&query)
+                    })
+                    .collect()
+            };
+            state.selected = state.selected.min(items.len().saturating_sub(1));
             true
         } else {
             false
@@ -609,6 +719,12 @@ impl AgentView {
         {
             return InputOutcome::Changed;
         }
+        if let crossterm::event::Event::Key(key) = ev
+            && key.kind == KeyEventKind::Press
+            && self.try_model_picker_visibility_key(key)
+        {
+            return InputOutcome::Changed;
+        }
 
         enum ArgPickerStep {
             Selected(crate::slash::command::ArgItem),
@@ -713,8 +829,9 @@ impl AgentView {
                 InputOutcome::Changed
             }
             ArgPickerStep::Selected(item) => {
-                let chains_to_effort = matches!(command_clone.as_str(), "model" | "m" | "advisor")
-                    && item.insert_text.ends_with(char::is_whitespace);
+                let chains_to_effort =
+                    matches!(command_clone.as_str(), "model" | "m" | "models" | "advisor")
+                        && item.insert_text.ends_with(char::is_whitespace);
                 if chains_to_effort {
                     let next_query = item.insert_text.clone();
                     if let Some(cmd) = self.prompt.slash_controller.registry().get(&command_clone) {
@@ -932,8 +1049,10 @@ impl AgentView {
                                     return InputOutcome::Action(Action::FetchSessionList);
                                 }
 
-                                let is_picker =
-                                    matches!(trimmed.as_str(), "model" | "m" | "theme" | "t");
+                                let is_picker = matches!(
+                                    trimmed.as_str(),
+                                    "model" | "m" | "models" | "theme" | "t"
+                                );
                                 if is_picker
                                     && let Some(command) =
                                         self.prompt.slash_controller.registry().get(&trimmed)
@@ -1858,10 +1977,14 @@ impl AgentView {
             {
                 // Arg picker: ModalWindow chrome and picker content
                 let title = match command.as_str() {
-                    "model" | "m" if !args_query.is_empty() => "Pick reasoning effort (session)",
-                    "model" | "m" => "Pick model (session)  tab: advisor",
+                    "model" | "m" | "models" if !args_query.is_empty() => {
+                        "Pick reasoning effort (session)"
+                    }
+                    "model" | "m" | "models" => {
+                        "Pick model (session)  tab: advisor  C-h hide  C-o hidden"
+                    }
                     "advisor" if !args_query.is_empty() => "Pick reasoning effort (advisor)",
-                    "advisor" => "Pick advisor model  tab: session",
+                    "advisor" => "Pick advisor model  tab: session  C-h hide  C-o hidden",
                     "theme" | "t" => "Pick theme",
                     _ => "Pick option",
                 };

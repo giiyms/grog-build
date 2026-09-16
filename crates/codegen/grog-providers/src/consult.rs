@@ -187,6 +187,8 @@ mod tests {
         assert!(is_native_model("claude-opus-5"));
         assert!(is_native_model("claude-bridge/claude-opus-4-6"));
         assert!(is_native_model("claude-opus-4-6"));
+        assert!(is_native_model("antigravity/gemini-3.8-flash-high"));
+        assert!(is_native_model("gemini-3.8-flash-high"));
         assert!(is_native_model("antigravity/gemini-3.7-flash-high"));
         assert!(is_native_model("gemini-3.7-flash-high"));
     }
