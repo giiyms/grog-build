@@ -31,12 +31,25 @@ pub async fn list_available_models(agent_config: &AgentConfig) -> Result<()> {
     println!("Default model: {}", state.current_model_id.0);
     println!();
     println!("Available models:");
+    let hidden = grog_providers::visibility::load_hidden_from_grog_home();
+    let show_hidden = grog_providers::visibility::show_hidden();
     for m in state.available_models {
-        if m.model_id == state.current_model_id {
-            println!("  * {} (default)", m.model_id.0);
-        } else {
-            println!("  - {}", m.model_id.0);
+        let key = m.model_id.0.as_ref();
+        if !grog_providers::visibility::is_picker_visible(key, &hidden) && !show_hidden {
+            continue;
         }
+        let source = grog_providers::source_label(key);
+        let mark = if m.model_id == state.current_model_id {
+            "*"
+        } else {
+            "-"
+        };
+        let hidden_tag = if hidden.contains(key) {
+            " (hidden)"
+        } else {
+            ""
+        };
+        println!("  {mark} {key}  {source}{hidden_tag}");
     }
 
     Ok(())

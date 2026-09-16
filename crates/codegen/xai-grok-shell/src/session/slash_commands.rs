@@ -534,6 +534,7 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "minimal",
     "ml",
     "model",
+    "models",
     "multiline",
     "new",
     "onboarding",

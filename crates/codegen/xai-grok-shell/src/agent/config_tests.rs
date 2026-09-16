@@ -7920,6 +7920,7 @@ fn resolve_model_list_empty_prefetch_yields_empty_base() {
     assert!(resolved.contains_key("claude-bridge/claude-sonnet-5"));
     assert!(resolved.contains_key("claude-bridge/claude-opus-5"));
     assert!(resolved.contains_key("claude-bridge/claude-opus-4-6"));
+    assert!(resolved.contains_key("antigravity/gemini-3.8-flash-high"));
     assert!(resolved.contains_key("antigravity/gemini-3.7-flash-high"));
     assert!(resolved.contains_key("antigravity/gemini-3.6-flash"));
     assert!(resolved.contains_key("codex/gpt-5.6-luna"));
@@ -7954,6 +7955,7 @@ fn resolve_model_list_merges_grog_native_catalog_without_overwriting() {
         .expect("grog catalog still inserts other natives");
     assert_eq!(flash.base_url, "grog://antigravity");
     assert!(flash.user_selectable);
+    assert_eq!(flash.description.as_deref(), Some("Antigravity"));
 }
 #[test]
 fn grog_native_catalog_has_own_creds_and_keeps_qualified_sampler_model() {
@@ -7962,6 +7964,7 @@ fn grog_native_catalog_has_own_creds_and_keeps_qualified_sampler_model() {
         "codex/gpt-5.6-luna",
         "claude-bridge/claude-fable-5-1",
         "claude-bridge/claude-opus-5",
+        "antigravity/gemini-3.8-flash-high",
         "antigravity/gemini-3.7-flash-high",
     ] {
         let entry = resolved.get(key).unwrap_or_else(|| panic!("missing {key}"));

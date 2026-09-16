@@ -2378,6 +2378,7 @@ fn resolve_model_override_routes_grog_native_council_seats_off_http() {
         "codex/gpt-5.6-luna",
         "claude-bridge/claude-fable-5-1",
         "claude-bridge/claude-opus-5",
+        "antigravity/gemini-3.8-flash-high",
         "antigravity/gemini-3.7-flash-high",
     ] {
         let mut ctx = ctx_with_toggle(HashMap::new());
@@ -2444,7 +2445,11 @@ fn resolve_model_override_routes_grog_native_council_seats_off_http() {
                         );
                     }
                     grog_providers::ProviderId::Antigravity => {
-                        assert_eq!(key, "antigravity/gemini-3.7-flash-high");
+                        assert!(
+                            key == "antigravity/gemini-3.8-flash-high"
+                                || key == "antigravity/gemini-3.7-flash-high",
+                            "{key}"
+                        );
                     }
                     grog_providers::ProviderId::Http => panic!("{key} must not be HTTP"),
                 }

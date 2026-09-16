@@ -262,7 +262,7 @@ fn three_seats_run_ranking_then_visible_verdict() {
                     assert_eq!(opts.effort.as_deref(), Some("medium"));
                     agent_ok("Use a write-through cache.")
                 }
-                Some("antigravity/gemini-3.7-flash-high") => {
+                Some("antigravity/gemini-3.8-flash-high") => {
                     assert_eq!(opts.effort.as_deref(), Some("high"));
                     agent_ok("Use a write-back cache.")
                 }

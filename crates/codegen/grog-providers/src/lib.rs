@@ -9,8 +9,8 @@ pub use grog_codex;
 
 pub mod consult;
 pub mod doctor;
+pub mod visibility;
 
-use grog_antigravity::ANTIGRAVITY_FALLBACK_MODELS;
 use grog_claude_bridge::CLAUDE_BRIDGE_MODELS;
 use grog_codex::CODEX_FALLBACK_MODELS;
 
@@ -212,11 +212,27 @@ pub fn default_effort(model_id: &str) -> Option<&'static str> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogEntry {
     pub provider: ProviderId,
-    pub id: &'static str,
-    pub display_name: &'static str,
+    pub id: String,
+    pub display_name: String,
+}
+
+pub fn source_label(model_id: &str) -> &'static str {
+    match ModelRef::parse(model_id).provider {
+        ProviderId::ClaudeBridge => "Claude",
+        ProviderId::Codex => "Codex",
+        ProviderId::Antigravity => "Antigravity",
+        ProviderId::Http => {
+            let slug = model_id.split('/').next_back().unwrap_or(model_id);
+            if slug.starts_with("grok") {
+                "Grok"
+            } else {
+                "Custom"
+            }
+        }
+    }
 }
 
 pub fn builtin_catalog() -> Vec<CatalogEntry> {
@@ -224,18 +240,18 @@ pub fn builtin_catalog() -> Vec<CatalogEntry> {
     for m in CODEX_FALLBACK_MODELS {
         out.push(CatalogEntry {
             provider: ProviderId::Codex,
-            id: m.id,
-            display_name: m.display_name,
+            id: m.id.to_string(),
+            display_name: m.display_name.to_string(),
         });
     }
     for m in CLAUDE_BRIDGE_MODELS {
         out.push(CatalogEntry {
             provider: ProviderId::ClaudeBridge,
-            id: m.id,
-            display_name: m.display_name,
+            id: m.id.to_string(),
+            display_name: m.display_name.to_string(),
         });
     }
-    for m in ANTIGRAVITY_FALLBACK_MODELS {
+    for m in grog_antigravity::listed_models() {
         out.push(CatalogEntry {
             provider: ProviderId::Antigravity,
             id: m.id,
@@ -254,7 +270,7 @@ mod tests {
         let r = ModelRef::parse("claude-bridge/claude-opus-5");
         assert_eq!(r.provider, ProviderId::ClaudeBridge);
         assert_eq!(r.model, "claude-opus-5");
-        let r = ModelRef::parse("agy/gemini-3.7-flash-high");
+        let r = ModelRef::parse("agy/gemini-3.8-flash-high");
         assert_eq!(r.provider, ProviderId::Antigravity);
         let r = ModelRef::parse("codex/gpt-5.6-luna");
         assert_eq!(r.provider, ProviderId::Codex);
@@ -314,6 +330,18 @@ mod tests {
         );
         assert!(
             keys.iter()
+                .any(|k| k == "antigravity/gemini-3.8-flash-high")
+        );
+        assert!(
+            keys.iter()
+                .any(|k| k == "antigravity/gemini-3.8-flash-medium")
+        );
+        assert!(
+            keys.iter()
+                .any(|k| k == "antigravity/gemini-3.7-flash-high")
+        );
+        assert!(
+            keys.iter()
                 .any(|k| k == "antigravity/gemini-3.7-flash-medium")
         );
         assert!(keys.iter().any(|k| k == "antigravity/gemini-3.6-flash"));
@@ -329,6 +357,20 @@ mod tests {
         assert!(keys.iter().any(|k| k == "codex/gpt-5.6-sol"));
         assert!(keys.iter().any(|k| k == "codex/gpt-5.6-terra"));
         assert!(keys.iter().any(|k| k == "codex/gpt-5.1-codex-max"));
+    }
+
+    #[test]
+    fn source_label_names_each_provider() {
+        assert_eq!(source_label("claude-bridge/claude-fable-5-1"), "Claude");
+        assert_eq!(source_label("claude-opus-5"), "Claude");
+        assert_eq!(source_label("codex/gpt-5.6-luna"), "Codex");
+        assert_eq!(
+            source_label("antigravity/gemini-3.8-flash-high"),
+            "Antigravity"
+        );
+        assert_eq!(source_label("gemini-3.8-flash-high"), "Antigravity");
+        assert_eq!(source_label("grok-4.6"), "Grok");
+        assert_eq!(source_label("my-local-llama"), "Custom");
     }
 
     #[test]
@@ -364,6 +406,7 @@ mod tests {
                 grog_antigravity::DEFAULT_ANTIGRAVITY_QUALIFIED,
                 "grog://antigravity",
             ),
+            ("gemini-3.8-flash-high", "grog://antigravity"),
             ("gemini-3.7-flash-high", "grog://antigravity"),
         ] {
             let route = inference_route(model, base);
@@ -409,6 +452,7 @@ mod tests {
                 grog_antigravity::DEFAULT_ANTIGRAVITY_QUALIFIED,
                 "grog://antigravity",
             ),
+            ("gemini-3.8-flash-high", "grog://antigravity"),
             ("gemini-3.7-flash-high", "grog://antigravity"),
         ] {
             assert_eq!(
@@ -427,6 +471,10 @@ mod tests {
         ));
         assert!(skip_http_title_generation("claude-fable-5-1", None));
         assert!(skip_http_title_generation("claude-opus-5", None));
+        assert!(skip_http_title_generation(
+            "antigravity/gemini-3.8-flash-high",
+            None
+        ));
         assert!(skip_http_title_generation(
             "antigravity/gemini-3.7-flash-high",
             None

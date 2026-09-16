@@ -180,7 +180,7 @@ impl ModelPickerTarget {
 
     pub fn from_command(command: &str) -> Option<Self> {
         match command {
-            "model" | "m" => Some(Self::Session),
+            "model" | "m" | "models" => Some(Self::Session),
             "advisor" => Some(Self::Advisor),
             _ => None,
         }
@@ -201,6 +201,10 @@ mod model_picker_target_tests {
         );
         assert_eq!(
             ModelPickerTarget::from_command("m"),
+            Some(ModelPickerTarget::Session)
+        );
+        assert_eq!(
+            ModelPickerTarget::from_command("models"),
             Some(ModelPickerTarget::Session)
         );
         assert_eq!(
@@ -751,8 +755,10 @@ impl ActiveModal {
                 args_query,
                 ..
             } => match command.as_str() {
-                "model" | "m" if !args_query.is_empty() => "Pick reasoning effort (session)",
-                "model" | "m" => "Pick model (session)  tab: advisor",
+                "model" | "m" | "models" if !args_query.is_empty() => {
+                    "Pick reasoning effort (session)"
+                }
+                "model" | "m" | "models" => "Pick model (session)  tab: advisor",
                 "advisor" if !args_query.is_empty() => "Pick reasoning effort (advisor)",
                 "advisor" => "Pick advisor model  tab: session",
                 "theme" | "t" => "Pick theme",

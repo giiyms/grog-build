@@ -77,7 +77,7 @@ pub fn agy() -> AdvisorSeat {
     AdvisorSeat {
         qualified: grog_providers::grog_antigravity::DEFAULT_ANTIGRAVITY_QUALIFIED.to_string(),
         short_name: "agy".into(),
-        display_name: "Gemini 3.7 Flash High".into(),
+        display_name: "Gemini 3.8 Flash High".into(),
         effort: None,
     }
 }
@@ -171,7 +171,7 @@ pub fn resolve_short_name(raw: &str) -> Result<AdvisorSeat, ResolveError> {
         "codex" => Ok(luna()),
         "agy" | "gemini" | "flash" | "antigravity" => Ok(agy()),
         other => {
-            // Bare catalog ids: claude-fable-5-1, gpt-5.6-luna, gemini-3.7-flash-high.
+            // Bare catalog ids: claude-fable-5-1, gpt-5.6-luna, gemini-3.8-flash-high.
             let parsed = ModelRef::parse(trimmed);
             if parsed.provider != ProviderId::Http || trimmed.contains("grok") {
                 return Ok(seat_from_qualified(&parsed.qualified()));

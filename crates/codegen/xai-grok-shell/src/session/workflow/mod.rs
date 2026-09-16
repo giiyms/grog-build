@@ -69,7 +69,7 @@ mod builtin_tests {
         assert!(script.contains("parallel(review_jobs)"));
         assert!(script.contains("claude-bridge/claude-fable-5-1"));
         assert!(!script.contains("claude-bridge/claude-opus-5"));
-        assert!(script.contains("antigravity/gemini-3.7-flash-high"));
+        assert!(script.contains("antigravity/gemini-3.8-flash-high"));
         assert!(script.contains("codex/gpt-5.6-luna"));
         assert!(!script.contains("codex/gpt-5.3-codex"));
         assert!(!script.contains("codex/gpt-5.1-codex"));
