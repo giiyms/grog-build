@@ -1,0 +1,37 @@
+You are not authenticated.
+
+Default model: grok-4.6
+
+Available models:
+  * grok-4.6  Grok
+  - grok-4.5  Grok
+  - codex/gpt-5.6-luna  Codex
+  - codex/gpt-5.6-sol  Codex
+  - codex/gpt-5.6-terra  Codex
+  - codex/gpt-5.1-codex  Codex
+  - codex/gpt-5.1-codex-max  Codex
+  - codex/gpt-5.1-codex-mini  Codex
+  - codex/codex-mini-latest  Codex
+  - codex/gpt-5.2-codex  Codex
+  - codex/gpt-5.3-codex  Codex
+  - codex/o4-mini  Codex
+  - claude-bridge/claude-fable-5-1  Claude
+  - claude-bridge/claude-fable-5  Claude
+  - claude-bridge/claude-sonnet-5  Claude
+  - claude-bridge/claude-opus-5  Claude
+  - claude-bridge/claude-opus-4-6  Claude
+  - claude-bridge/claude-sonnet-4-6  Claude
+  - claude-bridge/claude-haiku-4-5  Claude
+  - claude-bridge/claude-opus-4-7  Claude
+  - claude-bridge/claude-opus-4-8  Claude
+  - antigravity/gemini-3.8-flash-high  Antigravity
+  - antigravity/gemini-3.8-flash-medium  Antigravity
+  - antigravity/gemini-3.8-flash-low  Antigravity
+  - antigravity/gemini-3.7-flash-high  Antigravity
+  - antigravity/gemini-3.7-flash-medium  Antigravity
+  - antigravity/gemini-3.7-flash-low  Antigravity
+  - antigravity/gemini-3.6-flash-low  Antigravity
+  - antigravity/gemini-3.6-flash-high  Antigravity
+  - antigravity/gemini-3.1-pro  Antigravity
+  - antigravity/gemini-3.1-pro-high  Antigravity
+  - antigravity/gemini-3.1-pro-low  Antigravity
