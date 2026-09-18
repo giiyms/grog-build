@@ -1,5 +1,5 @@
 
-   cursor/rebase-dump-be7ce6e8-5134 /workspace
+   cursor/rebase-dump-e8563f8f-922d /workspace
 
 
 
@@ -14,7 +14,7 @@
 
                                       Approve in your browser to finish signing in.
 
-                                                        8VPZ-9GB3
+                                                        7BCC-DNER
 
                                          Make sure your browser shows this code.
 
