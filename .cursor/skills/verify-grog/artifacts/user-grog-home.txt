@@ -1,1 +1,1 @@
-user ~/.grog present; not selected (GROG_HOME override)
+user ~/.grog exists; GROG_HOME override was used
