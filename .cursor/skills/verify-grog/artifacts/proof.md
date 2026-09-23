@@ -1,41 +1,45 @@
-# Proof: dump-rebase 9bb727cc (grog 1.0.38)
+# Proof: dump-rebase 84745de9 (grog 1.0.41)
 
-Driven per `.cursor/skills/verify-grog/features/identity-and-home.md`, `doctor.md`, and `SKILL.md` after rebasing onto xai-org/grok-build `4247f661` (SOURCE_REV `9bb727ccdff0a793ee73bcde4e2e09cbef6b5387`).
+Driven per `.cursor/skills/verify-grog/features/identity-and-home.md`, `doctor.md`, and `SKILL.md` after rebasing onto xai-org/grok-build `07e35a3` (SOURCE_REV `84745de98b3d3996729aefcefd518890ffb73930`).
 
 ## Action
 
 ```
-VERIFY_RUN_ID=proof-9bb727cc
+VERIFY_RUN_ID=proof-84745de9
 scripts/launch.sh
 scripts/doctor.sh
-GROG_HOME=/tmp/grog-verify-proof-9bb727cc
+GROG_HOME=/tmp/grog-verify-proof-84745de9
 unset GROK_HOME
 target/debug/grog --version
 target/debug/grog doctor
 target/debug/grog doctor --json
+target/debug/grog models
 scripts/drive-tmux.sh start
 scripts/drive-tmux.sh wait 'Waiting for approval' 25
 scripts/cleanup.sh
 ```
 
+CLI isolation re-check (exported `GROG_HOME`): `grog doctor` wrote only under `/tmp/grog-verify-proof-84745de9-cli`; user `~/.grog` mtime unchanged.
+
 ## Visible result
 
-- `version.txt`: `grog 1.0.38 (4673fb220de5)` — product name is grog, not grok.
+- `version.txt`: `grog 1.0.41 (ccec787cdb84)` — product name is grog, not grok.
 - `doctor-script.txt`: identity grog; GROG_HOME owned by this run; official `~/.grok` absent.
 - `doctor-cli.txt`: `Grok Doctor` (dump terminal block) plus `Grog providers` (`claude-bridge` / `antigravity` / `codex` all `missing` on this VM) and Privacy defaults (telemetry off, marketplace empty, feedback off).
 - `doctor-json.txt`: dump `grog doctor --json` (`schemaVersion` `"1"`). Grog providers stay on the human path, not this JSON blob.
+- `models-cli.txt`: catalog lists `codex/`, `claude-bridge/`, and `antigravity/` ids (native providers).
 - `tui-login-gate.txt`: real pager TUI under isolated home; login gate (`Waiting for approval...`, `ctrl+q  quit`). No browser login was completed.
 - Isolated `config.toml` after TUI start had only `[marketplace] default_skills_installs_purged = true`. No vendor tokens.
 
 ## Side effects
 
-- `grog-home-listing.txt`: writes only under `/tmp/grog-verify-proof-9bb727cc`.
+- `grog-home-listing.txt`: TUI writes only under `/tmp/grog-verify-proof-84745de9`.
 - `official-grok-home.txt`: `official ~/.grok still absent`.
-- `user-grog-home.txt`: pre-existing user `~/.grog` was not selected (GROG_HOME override); grog did not use `~/.grok`.
+- `user-grog-home.txt`: user `~/.grog` was not selected when `GROG_HOME` is exported. Official `~/.grok` was never created.
 
 ## Cleanup
 
-`scripts/cleanup.sh` removed `/tmp/grog-verify-proof-9bb727cc` and the tmux session. These artifact files remained.
+`scripts/cleanup.sh` removed `/tmp/grog-verify-proof-84745de9` and the tmux session. These artifact files remained.
 
 ## Skips (not passes)
 
