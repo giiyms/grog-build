@@ -1220,6 +1220,8 @@ pub(crate) struct ParsedSkillRef {
     /// Plugin name if this is a plugin skill.
     pub plugin_name: Option<String>,
     pub scope: SkillScope,
+    /// Validated frontmatter `origin` slug, used for telemetry.
+    pub origin: Option<String>,
 }
 #[derive(Debug)]
 pub(super) enum SlashCommandOutcome {
@@ -1478,6 +1480,7 @@ fn parse_skill_references_with_catalog(
                     qualified_name: format_skill_name(hit.skill),
                     plugin_name: hit.skill.plugin_name.clone(),
                     scope: hit.skill.scope,
+                    origin: hit.skill.origin.clone(),
                 }
             })
             .collect(),
@@ -1592,6 +1595,7 @@ pub(super) fn resolve_model_authored_skill(
             qualified_name: format_skill_name(skill),
             plugin_name: skill.plugin_name.clone(),
             scope: skill.scope,
+            origin: skill.origin.clone(),
         }],
     })
 }
