@@ -1,1 +1,1 @@
-user ~/.grog exists; not selected when GROG_HOME is exported; grog did not use ~/.grok
+1790262752 /home/ubuntu/.grog
